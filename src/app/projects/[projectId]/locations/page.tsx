@@ -43,9 +43,12 @@ export default function LocationsPage() {
       name: data.name,
       description: data.description || '',
       imageUrl: data.imageUrl,
+      images: [],
       color: data.color || '#10B981',
       tags: data.tags || [],
       attachments: [],
+      metadata: {},
+      order: locations.length,
       createdAt: now,
       updatedAt: now,
     };

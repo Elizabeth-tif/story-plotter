@@ -162,12 +162,11 @@ export const createSceneSchema = z.object({
   description: z
     .string()
     .max(2000, 'Description must be less than 2000 characters')
-    .optional()
     .default(''),
-  content: z.string().optional().default(''),
+  content: z.string().default(''),
   povCharacterId: z.string().uuid().optional(),
   location: z.string().max(255).optional(),
-  status: sceneStatusSchema.optional().default('draft'),
+  status: sceneStatusSchema.default('draft'),
   color: z
     .string()
     .regex(/^#[0-9A-Fa-f]{6}$/, 'Invalid color format')
@@ -175,7 +174,6 @@ export const createSceneSchema = z.object({
   tags: z
     .array(z.string().max(50))
     .max(20, 'Maximum 20 tags allowed')
-    .optional()
     .default([]),
 });
 
@@ -197,7 +195,6 @@ export const createPlotlineSchema = z.object({
   description: z
     .string()
     .max(5000, 'Description must be less than 5000 characters')
-    .optional()
     .default(''),
   color: z
     .string()
@@ -230,9 +227,11 @@ export const createLocationSchema = z.object({
   description: z
     .string()
     .max(10000, 'Description must be less than 10000 characters')
-    .optional()
     .default(''),
-  metadata: z.record(z.unknown()).optional().default({}),
+  imageUrl: z.string().url().optional(),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Invalid color format').optional(),
+  tags: z.array(z.string().max(50)).max(20, 'Maximum 20 tags allowed').default([]),
+  metadata: z.record(z.unknown()).default({}),
 });
 
 export const updateLocationSchema = createLocationSchema.partial().extend({
@@ -251,13 +250,13 @@ export const createNoteSchema = z.object({
     .min(1, 'Title is required')
     .max(255, 'Title must be less than 255 characters')
     .trim(),
-  content: z.string().optional().default(''),
-  category: noteCategorySchema.optional().default('general'),
+  content: z.string().default(''),
+  category: noteCategorySchema.default('general'),
   tags: z
     .array(z.string().max(50))
     .max(20, 'Maximum 20 tags allowed')
-    .optional()
     .default([]),
+  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Invalid color format').optional(),
 });
 
 export const linkedEntitySchema = z.object({
@@ -349,13 +348,13 @@ export type CreateProjectInput = z.infer<typeof createProjectSchema>;
 export type UpdateProjectInput = z.infer<typeof updateProjectSchema>;
 export type CreateCharacterInput = z.input<typeof createCharacterSchema>;
 export type UpdateCharacterInput = z.infer<typeof updateCharacterSchema>;
-export type CreateSceneInput = z.infer<typeof createSceneSchema>;
+export type CreateSceneInput = z.input<typeof createSceneSchema>;
 export type UpdateSceneInput = z.infer<typeof updateSceneSchema>;
-export type CreatePlotlineInput = z.infer<typeof createPlotlineSchema>;
+export type CreatePlotlineInput = z.input<typeof createPlotlineSchema>;
 export type UpdatePlotlineInput = z.infer<typeof updatePlotlineSchema>;
-export type CreateLocationInput = z.infer<typeof createLocationSchema>;
+export type CreateLocationInput = z.input<typeof createLocationSchema>;
 export type UpdateLocationInput = z.infer<typeof updateLocationSchema>;
-export type CreateNoteInput = z.infer<typeof createNoteSchema>;
+export type CreateNoteInput = z.input<typeof createNoteSchema>;
 export type UpdateNoteInput = z.infer<typeof updateNoteSchema>;
 export type UploadRequestInput = z.infer<typeof uploadRequestSchema>;
 export type UploadConfirmInput = z.infer<typeof uploadConfirmSchema>;

@@ -10,7 +10,8 @@ const expirations = new Map<string, number>();
 // Check and clean expired keys
 function cleanExpired() {
   const now = Date.now();
-  for (const [key, expireTime] of expirations.entries()) {
+  const entries = Array.from(expirations.entries());
+  for (const [key, expireTime] of entries) {
     if (expireTime <= now) {
       store.delete(key);
       expirations.delete(key);

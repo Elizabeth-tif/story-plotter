@@ -64,6 +64,7 @@ export interface Project {
   description: string;
   genre: string;
   settings: ProjectSettings;
+  targetWordCount?: number;
   createdAt: string;
   updatedAt: string;
   updatedBy: string;
@@ -155,6 +156,9 @@ export interface Plotline {
   color?: string;
   order: number;
   plotPoints: PlotPoint[];
+  sceneIds?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // ============================================
@@ -165,9 +169,15 @@ export interface Location {
   id: string;
   name: string;
   description: string;
+  imageUrl?: string;
   images: string[];
+  color?: string;
+  tags?: string[];
+  attachments?: string[];
   metadata: Record<string, unknown>;
   order: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 // ============================================
@@ -206,6 +216,8 @@ export interface Note {
   content: string;
   category: NoteCategory;
   tags: string[];
+  color?: string;
+  isPinned?: boolean;
   attachments: Attachment[];
   linkedEntities: LinkedEntity[];
   createdAt: string;

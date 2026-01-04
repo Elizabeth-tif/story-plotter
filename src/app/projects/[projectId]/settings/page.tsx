@@ -22,12 +22,12 @@ export default function SettingsPage() {
   const router = useRouter();
   const { user } = useAuthStore();
   const {
-    currentProject,
-    updateProjectMetadata,
-    clearProject,
+    project: currentProject,
+    updateProjectMeta: updateProjectMetadata,
     setProject,
     isDirty,
   } = useProjectStore();
+  const clearProject = () => setProject(null);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
@@ -155,7 +155,7 @@ export default function SettingsPage() {
     );
   }
 
-  const totalWordCount = currentProject.scenes.reduce((sum, s) => sum + s.wordCount, 0);
+  const totalWordCount = currentProject.scenes.reduce((sum: number, s: { wordCount: number }) => sum + s.wordCount, 0);
   const progress = currentProject.targetWordCount
     ? Math.min(Math.round((totalWordCount / currentProject.targetWordCount) * 100), 100)
     : 0;
@@ -270,7 +270,7 @@ export default function SettingsPage() {
             </div>
             <div className="text-center p-4 bg-muted/50 rounded-lg">
               <p className="text-3xl font-bold text-primary">
-                {currentProject.scenes.filter((s) => s.status === 'complete').length}
+                {currentProject.scenes.filter((s: { status: string }) => s.status === 'complete').length}
               </p>
               <p className="text-sm text-muted-foreground">Complete Scenes</p>
             </div>

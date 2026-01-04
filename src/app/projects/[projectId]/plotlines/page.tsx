@@ -44,6 +44,7 @@ export default function PlotlinesPage() {
       description: data.description || '',
       color: data.color || '#8B5CF6',
       sceneIds: [],
+      plotPoints: [],
       order: plotlines.length,
       createdAt: now,
       updatedAt: now,
@@ -125,9 +126,9 @@ export default function PlotlinesPage() {
       {sortedPlotlines.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {sortedPlotlines.map((plotline) => {
-            const sceneCount = plotline.sceneIds.length;
+            const sceneCount = plotline.sceneIds?.length || 0;
             const associatedScenes = scenes.filter((s) =>
-              plotline.sceneIds.includes(s.id)
+              plotline.sceneIds?.includes(s.id)
             );
             const completedScenes = associatedScenes.filter(
               (s) => s.status === 'complete'

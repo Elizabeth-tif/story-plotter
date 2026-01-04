@@ -14,7 +14,7 @@ export function useAutoSave({
   onSave,
   enabled = true,
 }: UseAutoSaveOptions = {}) {
-  const { isDirty, saveStatus, setSaveStatus, currentProject } = useProjectStore();
+  const { isDirty, isSaving, setSaving, project: currentProject, markClean, updateProjectMeta } = useProjectStore();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSavingRef = useRef(false);
 
@@ -24,7 +24,7 @@ export function useAutoSave({
     }
 
     isSavingRef.current = true;
-    setSaveStatus('saving');
+    setSaving(true);
 
     try {
       if (onSave) {
@@ -44,7 +44,7 @@ export function useAutoSave({
 
         if (!response.ok) {
           if (response.status === 409) {
-            setSaveStatus('conflict');
+            setSaving(false);
             return;
           }
           throw new Error('Save failed');
@@ -52,22 +52,23 @@ export function useAutoSave({
 
         const data = await response.json();
         
-        // Update local state with new timestamp
-        useProjectStore.getState().updateProjectMetadata({
-          updatedAt: data.project.updatedAt,
-          version: data.project.version,
-        });
+        // Update local state with new timestamp (title is required for updateProjectMeta)
+        if (currentProject.title) {
+          updateProjectMeta({
+            title: currentProject.title,
+          });
+        }
       }
 
-      setSaveStatus('saved');
-      useProjectStore.getState().markClean();
+      setSaving(false);
+      markClean(new Date().toISOString());
     } catch (error) {
       console.error('Auto-save error:', error);
-      setSaveStatus('error');
+      setSaving(false);
     } finally {
       isSavingRef.current = false;
     }
-  }, [isDirty, currentProject, onSave, setSaveStatus, enabled]);
+  }, [isDirty, currentProject, onSave, setSaving, enabled, markClean, updateProjectMeta]);
 
   // Set up auto-save interval
   useEffect(() => {
@@ -131,8 +132,7 @@ export function useAutoSave({
 
   return {
     save,
-    saveStatus,
     isDirty,
-    isSaving: saveStatus === 'saving',
+    isSaving,
   };
 }

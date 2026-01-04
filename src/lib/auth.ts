@@ -78,6 +78,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session;
     },
   },
+  // @ts-expect-error trustHost is valid for deployment
   trustHost: true,
 });
 

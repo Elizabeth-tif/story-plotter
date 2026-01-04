@@ -70,7 +70,7 @@ export function useConflictResolution(): UseConflictResolutionReturn {
     // 2. For metadata: prefer local changes
     // 3. Update version and timestamp
 
-    const mergeArrays = <T extends { id: string; updatedAt: string }>(
+    const mergeArrays = <T extends { id: string; updatedAt?: string }>(
       local: T[],
       server: T[]
     ): T[] => {
@@ -79,10 +79,12 @@ export function useConflictResolution(): UseConflictResolutionReturn {
       // Add all server items
       server.forEach((item) => merged.set(item.id, item));
       
-      // Add/update with local items (prefer newer)
+      // Add/update with local items (prefer newer if updatedAt exists)
       local.forEach((item) => {
         const existing = merged.get(item.id);
-        if (!existing || new Date(item.updatedAt) > new Date(existing.updatedAt)) {
+        if (!existing || (item.updatedAt && existing.updatedAt && new Date(item.updatedAt) > new Date(existing.updatedAt))) {
+          merged.set(item.id, item);
+        } else if (!existing) {
           merged.set(item.id, item);
         }
       });

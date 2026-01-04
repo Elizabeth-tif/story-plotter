@@ -67,6 +67,7 @@ export default function NotesPage() {
       isPinned: false,
       tags: data.tags || [],
       attachments: [],
+      linkedEntities: [],
       createdAt: now,
       updatedAt: now,
     };
