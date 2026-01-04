@@ -32,7 +32,7 @@ export const loginSchema = z.object({
     .email('Invalid email address')
     .transform((email) => email.toLowerCase().trim()),
   password: z.string().min(1, 'Password is required'),
-  rememberMe: z.boolean().optional().default(false),
+  rememberMe: z.boolean().default(false),
 });
 
 export const forgotPasswordSchema = z.object({
