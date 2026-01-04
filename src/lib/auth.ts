@@ -1,18 +1,20 @@
-import NextAuth from 'next-auth';
-import Credentials from 'next-auth/providers/credentials';
+import NextAuth, { type NextAuthOptions } from 'next-auth';
+import CredentialsProvider from 'next-auth/providers/credentials';
 import { kv } from './kv';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import type { UserCredentials } from '@/types';
+import type { JWT } from 'next-auth/jwt';
+import type { Session, User } from 'next-auth';
 
 const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const authOptions: NextAuthOptions = {
   providers: [
-    Credentials({
+    CredentialsProvider({
       name: 'credentials',
       credentials: {
         email: { label: 'Email', type: 'email' },
@@ -63,14 +65,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     error: '/login',
   },
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user }: { token: JWT; user?: User }) {
       if (user) {
         token.id = user.id;
         token.email = user.email;
       }
       return token;
     },
-    async session({ session, token }) {
+    async session({ session, token }: { session: Session; token: JWT }) {
       if (token && session.user) {
         session.user.id = token.id as string;
         session.user.email = token.email as string;
@@ -78,9 +80,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session;
     },
   },
-  // @ts-expect-error trustHost is valid for deployment
-  trustHost: true,
-});
+};
+
+const handler = NextAuth(authOptions);
+
+export { handler as GET, handler as POST };
+export const handlers = { GET: handler, POST: handler };
+
+// Helper function to get session in API routes (compatible with auth.js v5 pattern)
+import { getServerSession } from 'next-auth';
+
+export async function auth() {
+  return getServerSession(authOptions);
+}
 
 // Extend the default session types
 declare module 'next-auth' {
