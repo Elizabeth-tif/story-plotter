@@ -112,7 +112,6 @@ export const createCharacterSchema = z.object({
   role: z
     .string()
     .max(100, 'Role must be less than 100 characters')
-    .optional()
     .default(''),
   age: z
     .number()
@@ -123,7 +122,6 @@ export const createCharacterSchema = z.object({
   description: z
     .string()
     .max(10000, 'Description must be less than 10000 characters')
-    .optional()
     .default(''),
   color: z
     .string()
@@ -132,7 +130,6 @@ export const createCharacterSchema = z.object({
   tags: z
     .array(z.string().max(50))
     .max(20, 'Maximum 20 tags allowed')
-    .optional()
     .default([]),
 });
 
