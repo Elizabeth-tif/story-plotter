@@ -9,7 +9,7 @@ import {
   deleteProject as deleteProjectFromR2,
 } from '@/lib/r2';
 import { createProjectSchema } from '@/lib/validations';
-import type { Project, ProjectSummary } from '@/types';
+import type { Project, ProjectSummary, ProjectIndex } from '@/types';
 
 // GET /api/projects - List all projects
 export async function GET() {
@@ -110,11 +110,14 @@ export async function POST(request: NextRequest) {
     await saveProject(userId, projectId, project);
     
     // Update project index
-    const projectIndex = await getProjectIndex(userId) || {
-      userId,
-      projects: [],
-      lastModified: now,
-    };
+    let projectIndex = await getProjectIndex(userId);
+    if (!projectIndex) {
+      projectIndex = {
+        userId,
+        projects: [],
+        lastModified: now,
+      } as ProjectIndex;
+    }
     
     const projectSummary: ProjectSummary = {
       id: projectId,
