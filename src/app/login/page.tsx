@@ -8,7 +8,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { BookOpen, Eye, EyeOff } from 'lucide-react';
 import { Button, Input, Label, Alert, AlertDescription } from '@/components/ui';
-import { loginSchema, type LoginInput } from '@/lib/validations';
+import { loginSchema, type LoginInputForm } from '@/lib/validations';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -22,7 +22,7 @@ export default function LoginPage() {
     register,
     handleSubmit,
     formState: { errors },
-  } = useForm<LoginInput>({
+  } = useForm<LoginInputForm>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
       rememberMe: false,
@@ -38,7 +38,7 @@ export default function LoginPage() {
     }
   }, [searchParams]);
 
-  const onSubmit = async (data: LoginInput) => {
+  const onSubmit = async (data: LoginInputForm) => {
     setIsLoading(true);
     setError(null);
 
