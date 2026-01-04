@@ -24,6 +24,9 @@ export default function LoginPage() {
     formState: { errors },
   } = useForm<LoginInput>({
     resolver: zodResolver(loginSchema),
+    defaultValues: {
+      rememberMe: false,
+    },
   });
 
   useEffect(() => {
