@@ -1,8 +1,18 @@
 import Link from 'next/link';
+import { cookies } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { BookOpen, Users, FileText, Clock, GitBranch, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui';
 
-export default function HomePage() {
+export default async function HomePage() {
+  // Check if user is logged in and redirect to dashboard
+  const cookieStore = await cookies();
+  const authToken = cookieStore.get('auth-token')?.value;
+  
+  if (authToken) {
+    redirect('/dashboard');
+  }
+
   return (
     <div className="min-h-screen">
       {/* Header */}

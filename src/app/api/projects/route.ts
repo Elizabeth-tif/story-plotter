@@ -53,7 +53,9 @@ export async function GET() {
 // POST /api/projects - Create new project
 export async function POST(request: NextRequest) {
   try {
+    console.log('[API Projects POST] Creating new project...');
     const session = await auth();
+    console.log('[API Projects POST] Session:', session?.user?.id ? 'authenticated' : 'not authenticated');
     
     if (!session?.user?.id) {
       return NextResponse.json(
@@ -64,6 +66,7 @@ export async function POST(request: NextRequest) {
     
     const userId = session.user.id;
     const body = await request.json();
+    console.log('[API Projects POST] Creating project for user:', userId);
     
     // Validate input
     const validationResult = createProjectSchema.safeParse(body);
@@ -111,6 +114,8 @@ export async function POST(request: NextRequest) {
     // Save project to storage
     await storage.setProject(userId, projectId, project);
     
+    console.log('[API Projects POST] Project created:', projectId);
+    
     return NextResponse.json({
       success: true,
       project: {
@@ -130,7 +135,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (error) {
-    console.error('Error creating project:', error);
+    console.error('[API Projects POST] Error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to create project' },
       { status: 500 }

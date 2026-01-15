@@ -55,20 +55,30 @@ export default function DashboardPage() {
   // Create project mutation
   const createProjectMutation = useMutation({
     mutationFn: async (data: CreateProjectRequest) => {
+      console.log('[Dashboard] Creating project:', data);
       const response = await fetch('/api/projects', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
-      if (!response.ok) throw new Error('Failed to create project');
+      console.log('[Dashboard] Create response status:', response.status);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[Dashboard] Create failed:', errorData);
+        throw new Error(errorData.error || 'Failed to create project');
+      }
       return response.json();
     },
     onSuccess: (data) => {
+      console.log('[Dashboard] Project created, redirecting to:', `/projects/${data.project.id}/timeline`);
       queryClient.invalidateQueries({ queryKey: ['projects'] });
       setIsCreateModalOpen(false);
       setNewProjectTitle('');
       setNewProjectGenre('');
       router.push(`/projects/${data.project.id}/timeline`);
+    },
+    onError: (error) => {
+      console.error('[Dashboard] Create project error:', error);
     },
   });
 

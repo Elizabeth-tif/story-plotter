@@ -110,19 +110,26 @@ export async function removeAuthCookie(): Promise<void> {
 // ============================================
 
 export async function auth(): Promise<Session | null> {
-  const token = await getAuthCookie();
-  
-  if (!token) {
+  try {
+    const token = await getAuthCookie();
+    console.log('[Auth] Token exists:', !!token);
+    
+    if (!token) {
+      return null;
+    }
+    
+    const user = await verifyToken(token);
+    console.log('[Auth] User verified:', !!user);
+    
+    if (!user) {
+      return null;
+    }
+    
+    return { user };
+  } catch (error) {
+    console.error('[Auth] Error getting session:', error);
     return null;
   }
-  
-  const user = await verifyToken(token);
-  
-  if (!user) {
-    return null;
-  }
-  
-  return { user };
 }
 
 // ============================================

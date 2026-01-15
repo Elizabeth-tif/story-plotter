@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Sidebar, Header } from '@/components/layout';
 import { LoadingScreen } from '@/components/ui';
@@ -14,17 +15,31 @@ interface ProjectLayoutProps {
 
 export default function ProjectLayout({ children, params }: ProjectLayoutProps) {
   const { projectId } = use(params);
+  const router = useRouter();
   const { setProject, setLoading, setError, project } = useProjectStore();
 
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, error} = useQuery({
     queryKey: ['project', projectId],
     queryFn: async () => {
+      console.log('[ProjectLayout] Fetching project:', projectId);
       const response = await fetch(`/api/projects/${projectId}`);
-      if (!response.ok) {
-        throw new Error('Failed to load project');
+      console.log('[ProjectLayout] Response status:', response.status);
+      
+      if (response.status === 401) {
+        // Unauthorized - will be handled by middleware redirect
+        throw new Error('Unauthorized');
       }
-      return response.json();
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || 'Failed to load project');
+      }
+      
+      const result = await response.json();
+      console.log('[ProjectLayout] Project loaded:', result.project?.id);
+      return result;
     },
+    retry: false,
   });
 
   useEffect(() => {

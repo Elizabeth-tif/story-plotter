@@ -11,9 +11,12 @@ interface RouteParams {
 // GET /api/projects/[projectId] - Get project details
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
+    console.log('[API Project GET] Starting...');
     const session = await auth();
+    console.log('[API Project GET] Session:', session?.user?.id ? 'authenticated' : 'not authenticated');
     
     if (!session?.user?.id) {
+      console.log('[API Project GET] Unauthorized - no session');
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
@@ -22,8 +25,10 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     
     const { projectId } = await params;
     const userId = session.user.id;
+    console.log('[API Project GET] User:', userId, 'Project:', projectId);
     
     const project = await storage.getProject(userId, projectId);
+    console.log('[API Project GET] Project found:', !!project);
     
     if (!project) {
       return NextResponse.json(
@@ -45,7 +50,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       project,
     });
   } catch (error) {
-    console.error('Error fetching project:', error);
+    console.error('[API Project GET] Error:', error);
     return NextResponse.json(
       { success: false, error: 'Failed to fetch project' },
       { status: 500 }

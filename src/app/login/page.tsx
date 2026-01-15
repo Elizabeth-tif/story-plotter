@@ -69,9 +69,10 @@ function LoginForm() {
       console.log('[Login Page] Setting user in store:', result.user);
       setUser(result.user);
       
-      // Redirect to dashboard
-      console.log('[Login Page] Redirecting to dashboard...');
-      router.push('/dashboard');
+      // Redirect to callback URL or dashboard
+      const callbackUrl = searchParams.get('callbackUrl') || '/dashboard';
+      console.log('[Login Page] Redirecting to:', callbackUrl);
+      router.push(callbackUrl);
     } catch (err) {
       console.error('[Login Page] Error:', err);
       setError('An unexpected error occurred. Please try again.');
