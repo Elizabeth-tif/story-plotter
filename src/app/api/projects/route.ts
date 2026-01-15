@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
 import { storage } from '@/lib/storage';
 import { createProjectSchema } from '@/lib/validations';
-import type { ProjectSummary } from '@/types';
+import type { Project, ProjectSummary } from '@/types';
 
 // GET /api/projects - List all projects
 export async function GET() {
