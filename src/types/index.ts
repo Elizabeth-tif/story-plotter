@@ -65,10 +65,12 @@ export interface Project {
   genre: string;
   settings: ProjectSettings;
   targetWordCount?: number;
+  wordCount?: number;
   createdAt: string;
   updatedAt: string;
   updatedBy: string;
   version: number;
+  archived: boolean;
   characters: Character[];
   scenes: Scene[];
   plotlines: Plotline[];

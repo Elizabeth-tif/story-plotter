@@ -27,13 +27,14 @@ export async function GET() {
     const projectSummaries: ProjectSummary[] = activeProjects.map((p) => ({
       id: p.id,
       title: p.title,
-      description: p.description,
-      genre: p.genre,
-      color: p.color,
+      description: p.description || '',
+      genre: p.genre || '',
       createdAt: p.createdAt,
       updatedAt: p.updatedAt,
-      archived: p.archived,
-      version: p.version,
+      updatedBy: p.updatedBy || '',
+      archived: p.archived ?? false,
+      wordCount: p.wordCount ?? 0,
+      settings: p.settings || {},
     }));
     
     return NextResponse.json({
@@ -117,11 +118,15 @@ export async function POST(request: NextRequest) {
         title,
         description: description || '',
         genre: genre || '',
-        color,
         createdAt: now,
         updatedAt: now,
+        updatedBy: userId,
         archived: false,
-        version: 1,
+        wordCount: 0,
+        settings: {
+          targetWordCount,
+          color,
+        },
       },
     });
   } catch (error) {
