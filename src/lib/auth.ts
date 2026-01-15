@@ -1,9 +1,8 @@
 import NextAuth, { type NextAuthOptions } from 'next-auth';
 import CredentialsProvider from 'next-auth/providers/credentials';
-import { kv } from './kv';
+import { storage } from './storage';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import type { UserCredentials } from '@/types';
 import type { JWT } from 'next-auth/jwt';
 import type { Session, User } from 'next-auth';
 
@@ -24,8 +23,8 @@ export const authOptions: NextAuthOptions = {
         try {
           const { email, password } = loginSchema.parse(credentials);
           
-          // Fetch user from Vercel KV
-          const userCredentials = await kv.get<UserCredentials>(`user:${email.toLowerCase()}`);
+          // Fetch user from storage
+          const userCredentials = await storage.getUser(email.toLowerCase());
           
           if (!userCredentials) {
             return null;
@@ -46,6 +45,7 @@ export const authOptions: NextAuthOptions = {
           return {
             id: userCredentials.userId,
             email: userCredentials.email,
+            name: userCredentials.name,
           };
         } catch (error) {
           if (error instanceof z.ZodError) {

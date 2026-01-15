@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
-import { kv } from '@/lib/kv';
-import { getProject, saveProject, objectExists, getPublicUrl } from '@/lib/r2';
+import { getProject, saveProject, objectExists, getPublicUrl, getJSON, deleteObject } from '@/lib/r2';
 import { uploadConfirmSchema } from '@/lib/validations';
 import type { UploadTracking, Attachment } from '@/types';
 
@@ -37,12 +36,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     
     const { uploadId, fileKey, filename, fileSize, fileType, entityType, entityId } = validationResult.data;
     
-    // Verify upload tracking record
-    const uploadTracking = await kv.get<UploadTracking>(`upload:${uploadId}`);
+    // Verify upload tracking record from R2
+    const uploadTracking = await getJSON<UploadTracking>(`auth/uploads/${uploadId}.json`);
     
     if (!uploadTracking) {
       return NextResponse.json(
         { success: false, error: 'Upload record not found or expired' },
+        { status: 404 }
+      );
+    }
+
+    // Check if upload has expired (1 hour)
+    if (new Date(uploadTracking.expiresAt) < new Date()) {
+      await deleteObject(`auth/uploads/${uploadId}.json`);
+      return NextResponse.json(
+        { success: false, error: 'Upload record expired' },
         { status: 404 }
       );
     }
@@ -133,8 +141,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     
     await saveProject(userId, projectId, project);
     
-    // Delete upload tracking record
-    await kv.del(`upload:${uploadId}`);
+    // Delete upload tracking record from R2
+    await deleteObject(`auth/uploads/${uploadId}.json`);
     
     return NextResponse.json({
       success: true,

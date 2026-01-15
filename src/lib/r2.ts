@@ -10,17 +10,38 @@ import {
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import type { Project, ProjectIndex, VersionSnapshot } from '@/types';
 
-// Initialize S3-compatible client for Cloudflare R2
-const r2Client = new S3Client({
-  region: 'auto',
-  endpoint: process.env.R2_ENDPOINT!,
-  credentials: {
-    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
-  },
-});
+// Validate required environment variables
+function validateR2Config() {
+  const required = ['R2_ENDPOINT', 'R2_ACCESS_KEY_ID', 'R2_SECRET_ACCESS_KEY', 'R2_BUCKET_NAME'];
+  const missing = required.filter(key => !process.env[key]);
+  
+  if (missing.length > 0) {
+    throw new Error(`Missing R2 configuration: ${missing.join(', ')}. Please set these environment variables.`);
+  }
+}
 
-const BUCKET_NAME = process.env.R2_BUCKET_NAME!;
+// Only validate in production or when R2 is explicitly configured
+const isR2Configured = process.env.R2_ENDPOINT && process.env.R2_ACCESS_KEY_ID;
+
+if (isR2Configured) {
+  validateR2Config();
+}
+
+// Initialize S3-compatible client for Cloudflare R2
+let r2Client: S3Client | null = null;
+let BUCKET_NAME: string | undefined = undefined;
+
+if (isR2Configured) {
+  r2Client = new S3Client({
+    region: 'auto',
+    endpoint: process.env.R2_ENDPOINT!,
+    credentials: {
+      accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+      secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+    },
+  });
+  BUCKET_NAME = process.env.R2_BUCKET_NAME!;
+}
 
 // ============================================
 // Path Helpers
@@ -50,6 +71,10 @@ export const r2Paths = {
 // ============================================
 
 export async function uploadJSON<T>(key: string, data: T): Promise<void> {
+  if (!r2Client || !BUCKET_NAME) {
+    throw new Error('R2 storage is not configured. Please set R2 environment variables.');
+  }
+  
   const command = new PutObjectCommand({
     Bucket: BUCKET_NAME,
     Key: key,
@@ -61,6 +86,10 @@ export async function uploadJSON<T>(key: string, data: T): Promise<void> {
 }
 
 export async function getJSON<T>(key: string): Promise<T | null> {
+  if (!r2Client || !BUCKET_NAME) {
+    throw new Error('R2 storage is not configured. Please set R2 environment variables.');
+  }
+  
   try {
     const command = new GetObjectCommand({
       Bucket: BUCKET_NAME,
@@ -81,6 +110,10 @@ export async function getJSON<T>(key: string): Promise<T | null> {
 }
 
 export async function deleteObject(key: string): Promise<void> {
+  if (!r2Client || !BUCKET_NAME) {
+    throw new Error('R2 storage is not configured. Please set R2 environment variables.');
+  }
+  
   const command = new DeleteObjectCommand({
     Bucket: BUCKET_NAME,
     Key: key,
@@ -90,6 +123,10 @@ export async function deleteObject(key: string): Promise<void> {
 }
 
 export async function objectExists(key: string): Promise<boolean> {
+  if (!r2Client || !BUCKET_NAME) {
+    throw new Error('R2 storage is not configured. Please set R2 environment variables.');
+  }
+  
   try {
     const command = new HeadObjectCommand({
       Bucket: BUCKET_NAME,
@@ -111,6 +148,10 @@ export async function getObjectMetadata(key: string): Promise<{
   contentLength?: number;
   contentType?: string;
 } | null> {
+  if (!r2Client || !BUCKET_NAME) {
+    throw new Error('R2 storage is not configured. Please set R2 environment variables.');
+  }
+  
   try {
     const command = new HeadObjectCommand({
       Bucket: BUCKET_NAME,
@@ -132,6 +173,10 @@ export async function getObjectMetadata(key: string): Promise<{
 }
 
 export async function listObjects(prefix: string): Promise<string[]> {
+  if (!r2Client || !BUCKET_NAME) {
+    throw new Error('R2 storage is not configured. Please set R2 environment variables.');
+  }
+  
   const command = new ListObjectsV2Command({
     Bucket: BUCKET_NAME,
     Prefix: prefix,
@@ -142,6 +187,10 @@ export async function listObjects(prefix: string): Promise<string[]> {
 }
 
 export async function copyObject(sourceKey: string, destinationKey: string): Promise<void> {
+  if (!r2Client || !BUCKET_NAME) {
+    throw new Error('R2 storage is not configured. Please set R2 environment variables.');
+  }
+  
   const command = new CopyObjectCommand({
     Bucket: BUCKET_NAME,
     CopySource: `${BUCKET_NAME}/${sourceKey}`,
@@ -160,6 +209,10 @@ export async function getUploadUrl(
   contentType: string,
   expiresIn: number = 3600
 ): Promise<string> {
+  if (!r2Client || !BUCKET_NAME) {
+    throw new Error('R2 storage is not configured. Please set R2 environment variables.');
+  }
+  
   const command = new PutObjectCommand({
     Bucket: BUCKET_NAME,
     Key: key,
@@ -173,6 +226,10 @@ export async function getDownloadUrl(
   key: string,
   expiresIn: number = 3600
 ): Promise<string> {
+  if (!r2Client || !BUCKET_NAME) {
+    throw new Error('R2 storage is not configured. Please set R2 environment variables.');
+  }
+  
   const command = new GetObjectCommand({
     Bucket: BUCKET_NAME,
     Key: key,
@@ -311,6 +368,10 @@ export async function uploadFile(
   body: Buffer | Uint8Array | string,
   contentType: string
 ): Promise<void> {
+  if (!r2Client || !BUCKET_NAME) {
+    throw new Error('R2 storage is not configured. Please set R2 environment variables.');
+  }
+  
   const command = new PutObjectCommand({
     Bucket: BUCKET_NAME,
     Key: key,
@@ -322,6 +383,10 @@ export async function uploadFile(
 }
 
 export async function getFile(key: string): Promise<Buffer | null> {
+  if (!r2Client || !BUCKET_NAME) {
+    throw new Error('R2 storage is not configured. Please set R2 environment variables.');
+  }
+  
   try {
     const command = new GetObjectCommand({
       Bucket: BUCKET_NAME,

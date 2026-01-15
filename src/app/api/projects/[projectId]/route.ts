@@ -1,15 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import {
-  getProject,
-  saveProject,
-  getProjectIndex,
-  saveProjectIndex,
-  deleteProject as deleteProjectFromR2,
-  createVersionSnapshot,
-} from '@/lib/r2';
+import { storage } from '@/lib/storage';
 import { updateProjectSchema } from '@/lib/validations';
-import type { Project, ProjectIndex } from '@/types';
+import type { Project } from '@/types';
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
@@ -30,7 +23,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     const { projectId } = await params;
     const userId = session.user.id;
     
-    const project = await getProject(userId, projectId);
+    const project = await storage.getProject(userId, projectId);
     
     if (!project) {
       return NextResponse.json(
@@ -82,8 +75,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       forceOverwrite?: boolean;
     };
     
-    // Get current project from R2
-    const serverProject = await getProject(userId, projectId);
+    // Get current project from storage
+    const serverProject = await storage.getProject(userId, projectId);
     
     if (!serverProject) {
       return NextResponse.json(
@@ -127,37 +120,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       version: newVersion,
     };
     
-    // Save to R2
-    await saveProject(userId, projectId, updatedProject);
-    
-    // Create version snapshot every 10 saves
-    if (newVersion % 10 === 0) {
-      await createVersionSnapshot(userId, projectId, updatedProject);
-    }
-    
-    // Update project index
-    const projectIndex = await getProjectIndex(userId);
-    if (projectIndex) {
-      const projectIdx = projectIndex.projects.findIndex((p) => p.id === projectId);
-      if (projectIdx !== -1) {
-        // Calculate word count from scenes
-        const wordCount = updatedProject.scenes.reduce((sum, scene) => sum + scene.wordCount, 0);
-        
-        projectIndex.projects[projectIdx] = {
-          ...projectIndex.projects[projectIdx],
-          title: updatedProject.title,
-          description: updatedProject.description,
-          genre: updatedProject.genre,
-          updatedAt: now,
-          updatedBy: userId,
-          wordCount,
-          settings: updatedProject.settings,
-        };
-        projectIndex.lastModified = now;
-        
-        await saveProjectIndex(userId, projectIndex);
-      }
-    }
+    // Save to storage
+    await storage.setProject(userId, projectId, updatedProject);
     
     return NextResponse.json({
       success: true,
@@ -201,7 +165,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const updates = validationResult.data;
     
     // Get current project
-    const project = await getProject(userId, projectId);
+    const project = await storage.getProject(userId, projectId);
     
     if (!project) {
       return NextResponse.json(
@@ -235,26 +199,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       version: project.version + 1,
     };
     
-    await saveProject(userId, projectId, updatedProject);
-    
-    // Update index
-    const projectIndex = await getProjectIndex(userId);
-    if (projectIndex) {
-      const idx = projectIndex.projects.findIndex((p) => p.id === projectId);
-      if (idx !== -1) {
-        projectIndex.projects[idx] = {
-          ...projectIndex.projects[idx],
-          ...(updates.title && { title: updates.title }),
-          ...(updates.description !== undefined && { description: updates.description }),
-          ...(updates.genre !== undefined && { genre: updates.genre }),
-          updatedAt: now,
-          updatedBy: userId,
-          settings: updatedProject.settings,
-        };
-        projectIndex.lastModified = now;
-        await saveProjectIndex(userId, projectIndex);
-      }
-    }
+    await storage.setProject(userId, projectId, updatedProject);
     
     return NextResponse.json({
       success: true,
@@ -285,7 +230,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const userId = session.user.id;
     
     // Get project to verify ownership
-    const project = await getProject(userId, projectId);
+    const project = await storage.getProject(userId, projectId);
     
     if (!project) {
       return NextResponse.json(
@@ -306,37 +251,18 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const permanent = searchParams.get('permanent') === 'true';
     
     if (permanent) {
-      // Permanently delete from R2
-      await deleteProjectFromR2(userId, projectId);
-      
-      // Remove from index
-      const projectIndex = await getProjectIndex(userId);
-      if (projectIndex) {
-        projectIndex.projects = projectIndex.projects.filter((p) => p.id !== projectId);
-        projectIndex.lastModified = new Date().toISOString();
-        await saveProjectIndex(userId, projectIndex);
-      }
+      // Permanently delete from storage
+      await storage.deleteProject(userId, projectId);
     } else {
       // Soft delete - mark as archived
       const now = new Date().toISOString();
       const updatedProject = {
         ...project,
+        archived: true,
         updatedAt: now,
         updatedBy: userId,
       };
-      await saveProject(userId, projectId, updatedProject);
-      
-      // Update index
-      const projectIndex = await getProjectIndex(userId);
-      if (projectIndex) {
-        const idx = projectIndex.projects.findIndex((p) => p.id === projectId);
-        if (idx !== -1) {
-          projectIndex.projects[idx].archived = true;
-          projectIndex.projects[idx].updatedAt = now;
-          projectIndex.lastModified = now;
-          await saveProjectIndex(userId, projectIndex);
-        }
-      }
+      await storage.setProject(userId, projectId, updatedProject);
     }
     
     return NextResponse.json({

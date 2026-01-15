@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
-import {
-  getProjectIndex,
-  saveProjectIndex,
-  saveProject,
-  getProject,
-  deleteProject as deleteProjectFromR2,
-} from '@/lib/r2';
+import { storage } from '@/lib/storage';
 import { createProjectSchema } from '@/lib/validations';
 import type { Project, ProjectSummary, ProjectIndex } from '@/types';
 
@@ -24,21 +18,27 @@ export async function GET() {
     }
     
     const userId = session.user.id;
-    const projectIndex = await getProjectIndex(userId);
-    
-    if (!projectIndex) {
-      return NextResponse.json({
-        projects: [],
-        lastModified: new Date().toISOString(),
-      });
-    }
+    const projects = await storage.getUserProjects(userId);
     
     // Filter out archived projects by default
-    const activeProjects = projectIndex.projects.filter((p) => !p.archived);
+    const activeProjects = projects.filter((p: Project) => !p.archived);
+    
+    // Map to summary format
+    const projectSummaries: ProjectSummary[] = activeProjects.map((p: Project) => ({
+      id: p.id,
+      title: p.title,
+      description: p.description,
+      genre: p.genre,
+      color: p.color,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+      archived: p.archived,
+      version: p.version,
+    }));
     
     return NextResponse.json({
-      projects: activeProjects,
-      lastModified: projectIndex.lastModified,
+      projects: projectSummaries,
+      lastModified: new Date().toISOString(),
     });
   } catch (error) {
     console.error('Error fetching projects:', error);
@@ -95,6 +95,7 @@ export async function POST(request: NextRequest) {
       updatedAt: now,
       updatedBy: userId,
       version: 1,
+      archived: false,
       characters: [],
       scenes: [],
       plotlines: [],
@@ -106,40 +107,22 @@ export async function POST(request: NextRequest) {
       notes: [],
     };
     
-    // Save project to R2
-    await saveProject(userId, projectId, project);
-    
-    // Update project index
-    let projectIndex = await getProjectIndex(userId);
-    if (!projectIndex) {
-      projectIndex = {
-        userId,
-        projects: [],
-        lastModified: now,
-      } as ProjectIndex;
-    }
-    
-    const projectSummary: ProjectSummary = {
-      id: projectId,
-      title,
-      description: description || '',
-      genre: genre || '',
-      createdAt: now,
-      updatedAt: now,
-      updatedBy: userId,
-      archived: false,
-      wordCount: 0,
-      settings: project.settings,
-    };
-    
-    projectIndex.projects.unshift(projectSummary);
-    projectIndex.lastModified = now;
-    
-    await saveProjectIndex(userId, projectIndex);
+    // Save project to storage
+    await storage.setProject(userId, projectId, project);
     
     return NextResponse.json({
       success: true,
-      project: projectSummary,
+      project: {
+        id: projectId,
+        title,
+        description: description || '',
+        genre: genre || '',
+        color,
+        createdAt: now,
+        updatedAt: now,
+        archived: false,
+        version: 1,
+      },
     });
   } catch (error) {
     console.error('Error creating project:', error);

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
-import { kv } from '@/lib/kv';
-import { getUploadUrl } from '@/lib/r2';
+import { getUploadUrl, uploadJSON } from '@/lib/r2';
 import type { UploadTracking } from '@/types';
 
 interface UploadRequestBody {
@@ -63,7 +62,8 @@ export async function POST(request: NextRequest) {
       expiresAt: new Date(Date.now() + 3600000).toISOString(), // 1 hour
     };
     
-    await kv.set(`upload:${uploadId}`, uploadTracking, { ex: 3600 });
+    // Store upload tracking in R2 (will be cleaned up on confirm or expire naturally)
+    await uploadJSON(`auth/uploads/${uploadId}.json`, uploadTracking);
     
     return NextResponse.json({
       success: true,

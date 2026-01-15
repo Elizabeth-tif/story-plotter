@@ -34,16 +34,7 @@ Your R2 endpoint URL format: `https://<account-id>.r2.cloudflarestorage.com`
 
 Replace `<account-id>` with your Cloudflare Account ID.
 
-## Step 2: Set Up Vercel KV (Redis)
-
-1. Go to Vercel Dashboard > Storage
-2. Click "Create Database" > "KV"
-3. Name it (e.g., "story-plotter-kv")
-4. Select your preferred region
-5. Click "Create"
-6. Vercel will show you the connection details - keep this tab open
-
-## Step 3: Deploy to Vercel
+## Step 2: Deploy to Vercel
 
 ### Connect Repository
 
@@ -61,7 +52,7 @@ NEXTAUTH_SECRET=<generate with: openssl rand -base64 32>
 NEXTAUTH_URL=https://your-domain.vercel.app
 ```
 
-#### Cloudflare R2
+#### Cloudflare R2 (stores ALL data - users, projects, files)
 ```
 R2_ACCOUNT_ID=<your-cloudflare-account-id>
 R2_ACCESS_KEY_ID=<your-r2-access-key>
@@ -70,35 +61,26 @@ R2_BUCKET_NAME=story-plotter
 R2_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
 ```
 
-#### Vercel KV
-These are auto-filled when you connect the KV database:
-```
-KV_URL=<from-vercel-dashboard>
-KV_REST_API_URL=<from-vercel-dashboard>
-KV_REST_API_TOKEN=<from-vercel-dashboard>
-KV_REST_API_READ_ONLY_TOKEN=<from-vercel-dashboard>
-```
-
 ### Deploy
 
 1. Click "Deploy"
 2. Wait for build to complete
 3. Your app will be live at `https://your-project.vercel.app`
 
-## Step 4: Connect Vercel KV to Project
-
-1. In Vercel Dashboard, go to your project
-2. Go to Storage tab
-3. Click "Connect Store"
-4. Select the KV database you created
-5. This will automatically add the KV environment variables
-
 ## File Structure in R2
 
 Your R2 bucket will automatically create this structure:
 
 ```
-users/
+auth/                        # User authentication data
+  ├── users/
+  │   └── {email-hash}/
+  │       └── credentials.json
+  ├── emails/
+  │   └── {email-hash}.json
+  └── reset-tokens/
+      └── {token}.json
+users/                       # User content
   └── {userId}/
       ├── profile/
       │   ├── avatar
@@ -138,6 +120,11 @@ users/
 - Users can only access files in their own `users/{userId}/` path
 - Authorization checked on every file operation
 
+✅ **R2-only architecture**
+- No external database dependencies
+- All data persists in Cloudflare R2
+- Simple and cost-effective
+
 ## Environment Variables Summary
 
 | Variable | Required | Description |
@@ -149,10 +136,8 @@ users/
 | `R2_SECRET_ACCESS_KEY` | ✅ | R2 API Secret Key |
 | `R2_BUCKET_NAME` | ✅ | Your R2 bucket name |
 | `R2_ENDPOINT` | ✅ | R2 endpoint URL |
-| `KV_URL` | ✅ | Vercel KV Redis URL |
-| `KV_REST_API_URL` | ✅ | Vercel KV REST API URL |
-| `KV_REST_API_TOKEN` | ✅ | Vercel KV API Token |
-| `KV_REST_API_READ_ONLY_TOKEN` | ✅ | Vercel KV Read-only Token |
+
+**Only 7 environment variables needed!**
 
 ## Verification
 
@@ -176,11 +161,6 @@ After deployment, test:
 - Verify R2 credentials are correct
 - Check R2 bucket name matches `R2_BUCKET_NAME`
 - Ensure R2 endpoint URL is correct
-
-### KV Errors
-- Verify KV database is connected to project
-- Check KV environment variables are set
-- Ensure KV database region matches deployment region
 
 ### Authentication Issues
 - Regenerate `NEXTAUTH_SECRET` if needed

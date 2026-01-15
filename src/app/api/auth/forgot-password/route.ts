@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { kv } from '@/lib/kv';
+import { storage } from '@/lib/storage';
 import { v4 as uuidv4 } from 'uuid';
 import bcrypt from 'bcryptjs';
 import { forgotPasswordSchema, resetPasswordSchema } from '@/lib/validations';
-import type { UserCredentials } from '@/types';
 
 // Request password reset
 export async function POST(request: NextRequest) {
@@ -28,7 +27,7 @@ export async function POST(request: NextRequest) {
     const { email } = validationResult.data;
     
     // Check if user exists
-    const user = await kv.get<UserCredentials>(`user:${email}`);
+    const user = await storage.getUser(email);
     
     // Always return success to prevent email enumeration
     if (!user) {
@@ -41,12 +40,12 @@ export async function POST(request: NextRequest) {
     // Generate reset token
     const resetToken = uuidv4();
     
-    // Store reset token with 1 hour expiry
-    await kv.set(
-      `reset:${resetToken}`,
-      { userId: user.userId, email },
-      { ex: 3600 }
-    );
+    // Store reset token with 1 hour expiry (now persisted in R2)
+    await storage.setResetToken(resetToken, {
+      userId: user.userId,
+      email,
+      expiresAt: Date.now() + 3600000, // 1 hour
+    });
     
     // TODO: Send reset email
     // For now, just log the token (in development)
@@ -78,10 +77,11 @@ async function handleResetPassword(body: unknown) {
   
   const { token, password } = validationResult.data;
   
-  // Get reset token data
-  const resetData = await kv.get<{ userId: string; email: string }>(`reset:${token}`);
+  // Get reset token data from R2 storage
+  const resetData = await storage.getResetToken(token);
   
-  if (!resetData) {
+  if (!resetData || resetData.expiresAt < Date.now()) {
+    if (resetData) await storage.deleteResetToken(token);
     return NextResponse.json(
       { success: false, error: 'Invalid or expired reset token' },
       { status: 400 }
@@ -89,7 +89,7 @@ async function handleResetPassword(body: unknown) {
   }
   
   // Get user credentials
-  const userCredentials = await kv.get<UserCredentials>(`user:${resetData.email}`);
+  const userCredentials = await storage.getUser(resetData.email);
   
   if (!userCredentials) {
     return NextResponse.json(
@@ -102,13 +102,13 @@ async function handleResetPassword(body: unknown) {
   const passwordHash = await bcrypt.hash(password, 12);
   
   // Update user credentials
-  await kv.set(`user:${resetData.email}`, {
+  await storage.setUser(resetData.email, {
     ...userCredentials,
     passwordHash,
   });
   
   // Delete reset token
-  await kv.del(`reset:${token}`);
+  await storage.deleteResetToken(token);
   
   return NextResponse.json({
     success: true,

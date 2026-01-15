@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
-import { kv } from '@/lib/kv';
 import { objectExists, getPublicUrl } from '@/lib/r2';
-import type { UploadTracking } from '@/types';
 
 interface ConfirmUploadBody {
   key: string;
