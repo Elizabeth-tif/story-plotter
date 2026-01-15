@@ -184,7 +184,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const now = new Date().toISOString();
     
     // Update project
-    const updatedProject: Project = {
+    const updatedProject = {
       ...project,
       ...(updates.title && { title: updates.title }),
       ...(updates.description !== undefined && { description: updates.description }),
