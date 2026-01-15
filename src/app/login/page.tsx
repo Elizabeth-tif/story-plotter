@@ -3,16 +3,17 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { signIn } from 'next-auth/react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { BookOpen, Eye, EyeOff } from 'lucide-react';
 import { Button, Input, Label, Alert, AlertDescription } from '@/components/ui';
+import { useAuthStore } from '@/stores';
 import { loginSchema, type LoginInputForm } from '@/lib/validations';
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { setUser } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -43,20 +44,36 @@ function LoginForm() {
     setError(null);
 
     try {
-      const result = await signIn('credentials', {
-        email: data.email,
-        password: data.password,
-        redirect: false,
+      console.log('[Login Page] Submitting login for:', data.email);
+      
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: data.email,
+          password: data.password,
+        }),
       });
 
-      if (result?.error) {
-        setError('Invalid email or password');
+      console.log('[Login Page] Response status:', response.status);
+      
+      const result = await response.json();
+      console.log('[Login Page] Response body:', result);
+
+      if (!result.success) {
+        setError(result.error || 'Invalid email or password');
         return;
       }
 
+      // Update auth store with user data
+      console.log('[Login Page] Setting user in store:', result.user);
+      setUser(result.user);
+      
+      // Redirect to dashboard
+      console.log('[Login Page] Redirecting to dashboard...');
       router.push('/dashboard');
-      router.refresh();
     } catch (err) {
+      console.error('[Login Page] Error:', err);
       setError('An unexpected error occurred. Please try again.');
     } finally {
       setIsLoading(false);

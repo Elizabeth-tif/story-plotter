@@ -49,7 +49,7 @@ export function Header({ projectTitle, showSaveStatus = false }: HeaderProps) {
 
   const handleLogout = async () => {
     try {
-      await fetch('/api/auth/signout', { method: 'POST' });
+      await fetch('/api/auth/logout', { method: 'POST' });
       logout();
       router.push('/login');
     } catch (error) {

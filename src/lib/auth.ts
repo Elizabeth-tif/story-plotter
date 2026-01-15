@@ -1,119 +1,188 @@
-import NextAuth, { type NextAuthOptions } from 'next-auth';
-import CredentialsProvider from 'next-auth/providers/credentials';
+import { cookies } from 'next/headers';
+import { SignJWT, jwtVerify } from 'jose';
 import { storage } from './storage';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
-import type { JWT } from 'next-auth/jwt';
-import type { Session, User } from 'next-auth';
 
-const loginSchema = z.object({
+// ============================================
+// Types
+// ============================================
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name?: string | null;
+}
+
+export interface Session {
+  user: AuthUser;
+}
+
+// ============================================
+// JWT Configuration
+// ============================================
+
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'fallback-secret-change-in-production'
+);
+const JWT_ISSUER = 'story-plotter';
+const JWT_AUDIENCE = 'story-plotter-users';
+const TOKEN_EXPIRY = '7d'; // 7 days
+const COOKIE_NAME = 'auth-token';
+
+// ============================================
+// Validation Schemas
+// ============================================
+
+export const loginSchema = z.object({
   email: z.string().email('Invalid email address'),
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
-export const authOptions: NextAuthOptions = {
-  providers: [
-    CredentialsProvider({
-      name: 'credentials',
-      credentials: {
-        email: { label: 'Email', type: 'email' },
-        password: { label: 'Password', type: 'password' },
-      },
-      async authorize(credentials) {
-        try {
-          const { email, password } = loginSchema.parse(credentials);
-          
-          // Fetch user from storage
-          const userCredentials = await storage.getUser(email.toLowerCase());
-          
-          if (!userCredentials) {
-            return null;
-          }
-          
-          // Verify password
-          const passwordMatch = await bcrypt.compare(password, userCredentials.passwordHash);
-          
-          if (!passwordMatch) {
-            return null;
-          }
-          
-          // Check if email is verified
-          if (!userCredentials.emailVerified) {
-            throw new Error('Please verify your email before logging in');
-          }
-          
-          return {
-            id: userCredentials.userId,
-            email: userCredentials.email,
-            name: userCredentials.name,
-          };
-        } catch (error) {
-          if (error instanceof z.ZodError) {
-            return null;
-          }
-          throw error;
-        }
-      },
-    }),
-  ],
-  session: {
-    strategy: 'jwt',
-    maxAge: 7 * 24 * 60 * 60, // 7 days
-  },
-  pages: {
-    signIn: '/login',
-    error: '/login',
-  },
-  callbacks: {
-    async jwt({ token, user }: { token: JWT; user?: User }) {
-      if (user) {
-        token.id = user.id;
-        token.email = user.email;
-      }
-      return token;
-    },
-    async session({ session, token }: { session: Session; token: JWT }) {
-      if (token && session.user) {
-        session.user.id = token.id as string;
-        session.user.email = token.email as string;
-      }
-      return session;
-    },
-  },
-};
+export const signupSchema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  email: z.string().email('Invalid email address'),
+  password: z.string().min(8, 'Password must be at least 8 characters'),
+});
 
-const handler = NextAuth(authOptions);
+// ============================================
+// JWT Token Functions
+// ============================================
 
-export { handler as GET, handler as POST };
-export const handlers = { GET: handler, POST: handler };
-
-// Helper function to get session in API routes (compatible with auth.js v5 pattern)
-import { getServerSession } from 'next-auth';
-
-export async function auth() {
-  return getServerSession(authOptions);
+export async function createToken(user: AuthUser): Promise<string> {
+  return new SignJWT({ 
+    id: user.id, 
+    email: user.email, 
+    name: user.name 
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt()
+    .setIssuer(JWT_ISSUER)
+    .setAudience(JWT_AUDIENCE)
+    .setExpirationTime(TOKEN_EXPIRY)
+    .sign(JWT_SECRET);
 }
 
-// Extend the default session types
-declare module 'next-auth' {
-  interface Session {
-    user: {
-      id: string;
-      email: string;
-      name?: string | null;
-      image?: string | null;
+export async function verifyToken(token: string): Promise<AuthUser | null> {
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET, {
+      issuer: JWT_ISSUER,
+      audience: JWT_AUDIENCE,
+    });
+    
+    return {
+      id: payload.id as string,
+      email: payload.email as string,
+      name: payload.name as string | null,
     };
+  } catch (error) {
+    return null;
+  }
+}
+
+// ============================================
+// Cookie Management
+// ============================================
+
+export async function setAuthCookie(token: string): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.set(COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    path: '/',
+    maxAge: 7 * 24 * 60 * 60, // 7 days in seconds
+  });
+}
+
+export async function getAuthCookie(): Promise<string | undefined> {
+  const cookieStore = await cookies();
+  return cookieStore.get(COOKIE_NAME)?.value;
+}
+
+export async function removeAuthCookie(): Promise<void> {
+  const cookieStore = await cookies();
+  cookieStore.delete(COOKIE_NAME);
+}
+
+// ============================================
+// Session Management (Server-side)
+// ============================================
+
+export async function auth(): Promise<Session | null> {
+  const token = await getAuthCookie();
+  
+  if (!token) {
+    return null;
   }
   
-  interface User {
-    id: string;
-    email: string;
+  const user = await verifyToken(token);
+  
+  if (!user) {
+    return null;
+  }
+  
+  return { user };
+}
+
+// ============================================
+// Authentication Actions
+// ============================================
+
+export async function login(email: string, password: string): Promise<{ success: boolean; error?: string; user?: AuthUser }> {
+  try {
+    console.log('[Auth] Starting login for:', email);
+    
+    // Validate input
+    const validated = loginSchema.parse({ email, password });
+    console.log('[Auth] Input validated');
+    
+    // Get user from storage
+    const userCredentials = await storage.getUser(validated.email.toLowerCase());
+    console.log('[Auth] User from storage:', userCredentials ? 'found' : 'not found');
+    
+    if (!userCredentials) {
+      return { success: false, error: 'Invalid email or password' };
+    }
+    
+    // Verify password
+    const passwordMatch = await bcrypt.compare(validated.password, userCredentials.passwordHash);
+    console.log('[Auth] Password match:', passwordMatch);
+    
+    if (!passwordMatch) {
+      return { success: false, error: 'Invalid email or password' };
+    }
+    
+    // Check if email is verified
+    console.log('[Auth] Email verified:', userCredentials.emailVerified);
+    if (!userCredentials.emailVerified) {
+      return { success: false, error: 'Please verify your email before logging in' };
+    }
+    
+    const user: AuthUser = {
+      id: userCredentials.userId,
+      email: userCredentials.email,
+      name: userCredentials.name,
+    };
+    
+    // Create and set token
+    console.log('[Auth] Creating token for user:', user.id);
+    const token = await createToken(user);
+    console.log('[Auth] Token created, setting cookie');
+    await setAuthCookie(token);
+    console.log('[Auth] Cookie set, login successful');
+    
+    return { success: true, user };
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.log('[Auth] Validation error:', error.errors);
+      return { success: false, error: error.errors[0]?.message || 'Invalid input' };
+    }
+    console.error('[Auth] Login error:', error);
+    return { success: false, error: 'An unexpected error occurred' };
   }
 }
 
-declare module 'next-auth/jwt' {
-  interface JWT {
-    id: string;
-    email: string;
-  }
+export async function logout(): Promise<void> {
+  await removeAuthCookie();
 }
