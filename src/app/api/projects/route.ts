@@ -3,7 +3,7 @@ import { auth } from '@/lib/auth';
 import { v4 as uuidv4 } from 'uuid';
 import { storage } from '@/lib/storage';
 import { createProjectSchema } from '@/lib/validations';
-import type { Project, ProjectSummary, ProjectIndex } from '@/types';
+import type { ProjectSummary } from '@/types';
 
 // GET /api/projects - List all projects
 export async function GET() {
@@ -21,10 +21,10 @@ export async function GET() {
     const projects = await storage.getUserProjects(userId);
     
     // Filter out archived projects by default
-    const activeProjects = projects.filter((p: Project) => !p.archived);
+    const activeProjects = projects.filter((p) => !p.archived);
     
     // Map to summary format
-    const projectSummaries: ProjectSummary[] = activeProjects.map((p: Project) => ({
+    const projectSummaries: ProjectSummary[] = activeProjects.map((p) => ({
       id: p.id,
       title: p.title,
       description: p.description,
