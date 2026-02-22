@@ -164,14 +164,19 @@ export const storage = {
   async getProject(userId: string, projectId: string): Promise<ProjectData | null> {
     if (!isR2Available()) {
       const key = `${userId}:${projectId}`;
-      return memoryProjects.get(key) || null;
+      const project = memoryProjects.get(key) || null;
+      console.log('[Storage] Retrieved project from memory:', key, project ? 'found' : 'not found');
+      return project;
     }
     
     try {
       const key = `users/${userId}/projects/${projectId}/project.json`;
-      return await getJSON<ProjectData>(key);
+      console.log('[Storage] Fetching project from R2:', key);
+      const project = await getJSON<ProjectData>(key);
+      console.log('[Storage] Project from R2:', project ? 'found' : 'not found');
+      return project;
     } catch (error) {
-      console.error('Error getting project from R2:', error);
+      console.error('[Storage] Error getting project from R2:', error);
       return null;
     }
   },
@@ -180,32 +185,43 @@ export const storage = {
     if (!isR2Available()) {
       const key = `${userId}:${projectId}`;
       memoryProjects.set(key, projectData);
+      console.log('[Storage] Project saved to memory:', key);
       return;
     }
     
     try {
+      console.log('[Storage] Saving project to R2:', projectId);
       const key = `users/${userId}/projects/${projectId}/project.json`;
       await uploadJSON(key, projectData);
+      console.log('[Storage] Project file uploaded:', key);
       
       // Update project index
       const indexKey = `users/${userId}/projects/index.json`;
+      console.log('[Storage] Reading project index:', indexKey);
       let index = await getJSON<{ projects: Array<{ id: string; updatedAt: string }> }>(indexKey);
       
       if (!index) {
+        console.log('[Storage] Creating new project index');
         index = { projects: [] };
+      } else {
+        console.log('[Storage] Existing index has', index.projects.length, 'projects');
       }
       
       // Add or update project in index
       const existingIndex = index.projects.findIndex(p => p.id === projectId);
       if (existingIndex >= 0) {
+        console.log('[Storage] Updating existing project in index');
         index.projects[existingIndex] = { id: projectId, updatedAt: projectData.updatedAt || new Date().toISOString() };
       } else {
+        console.log('[Storage] Adding new project to index');
         index.projects.push({ id: projectId, updatedAt: projectData.updatedAt || new Date().toISOString() });
       }
       
+      console.log('[Storage] Uploading updated index with', index.projects.length, 'projects');
       await uploadJSON(indexKey, index);
+      console.log('[Storage] Project and index saved successfully');
     } catch (error) {
-      console.error('Error saving project to R2:', error);
+      console.error('[Storage] Error saving project to R2:', error);
       throw error;
     }
   },
@@ -248,18 +264,24 @@ export const storage = {
           userProjects.push(project);
         }
       }
+      console.log('[Storage] Retrieved', userProjects.length, 'projects from memory for user:', userId);
       return userProjects;
     }
     
     try {
+      console.log('[Storage] Fetching user projects from R2 for:', userId);
       // Get project index from R2
       const indexKey = `users/${userId}/projects/index.json`;
       const index = await getJSON<{ projects: Array<{ id: string }> }>(indexKey);
       
-      if (!index || !index.projects) {
+      console.log('[Storage] Index retrieved:', index ? `${index.projects?.length || 0} projects` : 'null');
+      
+      if (!index || !index.projects || index.projects.length === 0) {
+        console.log('[Storage] No projects found in index');
         return [];
       }
       
+      console.log('[Storage] Fetching', index.projects.length, 'project files');
       // Fetch each project
       const projects = await Promise.all(
         index.projects.map(async (p) => {
@@ -268,9 +290,11 @@ export const storage = {
         })
       );
       
-      return projects.filter((p): p is ProjectData => p !== null);
+      const validProjects = projects.filter((p): p is ProjectData => p !== null);
+      console.log('[Storage] Retrieved', validProjects.length, 'valid projects');
+      return validProjects;
     } catch (error) {
-      console.error('Error getting user projects from R2:', error);
+      console.error('[Storage] Error getting user projects from R2:', error);
       return [];
     }
   },
