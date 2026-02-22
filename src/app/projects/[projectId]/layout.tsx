@@ -6,6 +6,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Sidebar, Header } from '@/components/layout';
 import { LoadingScreen } from '@/components/ui';
 import { useProjectStore } from '@/stores';
+import { useAutoSave } from '@/hooks';
 import type { Project } from '@/types';
 
 interface ProjectLayoutProps {
@@ -62,6 +63,12 @@ export default function ProjectLayout({ children }: ProjectLayoutProps) {
       console.error('[ProjectLayout] API returned success but no project data:', data);
     }
   }, [data, setProject]);
+
+  // Enable auto-save for this project
+  useAutoSave({
+    interval: 30000, // Save every 30 seconds
+    enabled: !!project,
+  });
 
   if (isLoading) {
     return <LoadingScreen message="Loading project..." />;

@@ -29,8 +29,10 @@ export function useAutoSave({
     try {
       if (onSave) {
         await onSave();
+        markClean(new Date().toISOString());
       } else {
         // Default save behavior
+        console.log('[AutoSave] Saving project:', currentProject.id);
         const response = await fetch(`/api/projects/${currentProject.id}`, {
           method: 'PUT',
           headers: {
@@ -38,30 +40,28 @@ export function useAutoSave({
           },
           body: JSON.stringify({
             project: currentProject,
-            lastModified: currentProject.updatedAt,
+            lastKnownTimestamp: currentProject.updatedAt,
           }),
         });
 
         if (!response.ok) {
           if (response.status === 409) {
+            console.log('[AutoSave] Conflict detected');
             setSaving(false);
+            isSavingRef.current = false;
             return;
           }
+          const errorText = await response.text();
+          console.error('[AutoSave] Save failed:', response.status, errorText);
           throw new Error('Save failed');
         }
 
         const data = await response.json();
-        
-        // Update local state with new timestamp (title is required for updateProjectMeta)
-        if (currentProject.title) {
-          updateProjectMeta({
-            title: currentProject.title,
-          });
-        }
+        console.log('[AutoSave] Save successful, new timestamp:', data.timestamp);
+        markClean(data.timestamp);
       }
 
       setSaving(false);
-      markClean(new Date().toISOString());
     } catch (error) {
       console.error('Auto-save error:', error);
       setSaving(false);

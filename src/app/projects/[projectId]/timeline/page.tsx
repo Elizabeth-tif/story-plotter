@@ -1,12 +1,16 @@
 'use client';
 
 import { useMemo } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { useProjectStore, useScenes, usePlotlines } from '@/stores';
 import { Card, CardContent, Badge } from '@/components/ui';
 import { Clock, Plus } from 'lucide-react';
 import { Button } from '@/components/ui';
 
 export default function TimelinePage() {
+  const router = useRouter();
+  const params = useParams();
+  const projectId = params?.projectId as string;
   const scenes = useScenes();
   const plotlines = usePlotlines();
   const { getCharacterById } = useProjectStore();
@@ -30,7 +34,10 @@ export default function TimelinePage() {
             Visualize the chronological order of your scenes
           </p>
         </div>
-        <Button className="gap-2">
+        <Button 
+          className="gap-2"
+          onClick={() => router.push(`/projects/${projectId}/scenes`)}
+        >
           <Plus className="h-4 w-4" />
           Add Scene
         </Button>
