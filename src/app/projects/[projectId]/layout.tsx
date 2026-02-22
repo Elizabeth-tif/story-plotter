@@ -26,17 +26,19 @@ export default function ProjectLayout({ children, params }: ProjectLayoutProps) 
       console.log('[ProjectLayout] Response status:', response.status);
       
       if (response.status === 401) {
-        // Unauthorized - will be handled by middleware redirect
-        throw new Error('Unauthorized');
+        router.push('/login');
+        throw new Error('Unauthorized - please log in');
       }
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || 'Failed to load project');
+        console.error('[ProjectLayout] Error response:', errorData);
+        throw new Error(errorData.error || `Failed to load project (${response.status})`);
       }
       
       const result = await response.json();
       console.log('[ProjectLayout] Project loaded:', result.project?.id);
+      console.log('[ProjectLayout] Project data:', result.project);
       return result;
     },
     retry: false,
@@ -64,10 +66,18 @@ export default function ProjectLayout({ children, params }: ProjectLayoutProps) 
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center max-w-md px-4">
+          <div className="text-6xl mb-4">⚠️</div>
           <h2 className="text-xl font-semibold mb-2">Failed to load project</h2>
-          <p className="text-muted-foreground">{error.message}</p>
+          <p className="text-muted-foreground mb-2">{error.message}</p>
+          <p className="text-sm text-muted-foreground/70 mb-6">Project ID: {projectId}</p>
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          >
+            Back to Dashboard
+          </button>
         </div>
       </div>
     );
