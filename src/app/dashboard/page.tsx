@@ -279,11 +279,10 @@ interface ProjectCardProps {
 }
 
 function ProjectCard({ project, view, isMenuOpen, onMenuToggle, onDelete }: ProjectCardProps) {
-  const router = useRouter();
-
-  const handleClick = () => {
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault();
     console.log('[ProjectCard] Clicked, navigating to:', `/projects/${project.id}/timeline`);
-    router.push(`/projects/${project.id}/timeline`);
+    window.location.href = `/projects/${project.id}/timeline`;
   };
 
   if (view === 'list') {
