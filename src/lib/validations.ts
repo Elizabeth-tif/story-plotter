@@ -168,8 +168,13 @@ export const createSceneSchema = z.object({
     .optional()
     .default(''),
   content: z.string().optional().default(''),
-  povCharacterId: z.string().uuid().optional(),
-  location: z.string().max(255).optional(),
+  povCharacterId: z
+    .string()
+    .uuid()
+    .optional()
+    .or(z.literal(''))
+    .transform(val => val === '' ? undefined : val),
+  location: z.string().max(255).optional().or(z.literal('')).transform(val => val === '' ? undefined : val),
   status: sceneStatusSchema.optional().default('draft'),
   color: z
     .string()

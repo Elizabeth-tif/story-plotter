@@ -38,6 +38,7 @@ export default function ScenesPage() {
   );
 
   const handleCreateScene = (data: CreateSceneInput) => {
+    console.log('[ScenesPage] Creating scene with data:', data);
     const now = new Date().toISOString();
     const newScene: Scene = {
       id: uuidv4(),
@@ -55,7 +56,9 @@ export default function ScenesPage() {
       createdAt: now,
       updatedAt: now,
     };
+    console.log('[ScenesPage] New scene object:', newScene);
     addScene(newScene);
+    console.log('[ScenesPage] Scene added to store');
     setIsCreateModalOpen(false);
   };
 
@@ -293,7 +296,7 @@ function SceneFormModal({
     defaultValues: {
       title: defaultValues?.title || '',
       description: defaultValues?.description || '',
-      povCharacterId: defaultValues?.povCharacterId,
+      povCharacterId: defaultValues?.povCharacterId || '',
       location: defaultValues?.location || '',
       status: defaultValues?.status || 'draft',
       color: defaultValues?.color || '#6B7280',
@@ -302,13 +305,18 @@ function SceneFormModal({
   });
 
   const handleFormSubmit = (data: CreateSceneInput) => {
+    console.log('[SceneForm] Submitting scene data:', data);
     onSubmit(data);
     reset();
   };
 
+  const handleFormError = (errors: any) => {
+    console.error('[SceneForm] Validation errors:', errors);
+  };
+
   return (
     <Modal isOpen={isOpen} onClose={onClose} title={title} className="max-w-lg">
-      <form onSubmit={handleSubmit(handleFormSubmit)} className="space-y-4 mt-4">
+      <form onSubmit={handleSubmit(handleFormSubmit, handleFormError)} className="space-y-4 mt-4">
         <div className="space-y-2">
           <Label htmlFor="title">Title *</Label>
           <Input id="title" {...register('title')} placeholder="Scene title" />
