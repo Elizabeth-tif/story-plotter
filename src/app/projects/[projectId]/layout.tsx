@@ -56,7 +56,10 @@ export default function ProjectLayout({ children, params }: ProjectLayoutProps) 
 
   useEffect(() => {
     if (data?.project) {
+      console.log('[ProjectLayout] Setting project in store:', data.project.id);
       setProject(data.project as Project);
+    } else if (data && !data.project) {
+      console.error('[ProjectLayout] API returned success but no project data:', data);
     }
   }, [data, setProject]);
 
@@ -71,6 +74,26 @@ export default function ProjectLayout({ children, params }: ProjectLayoutProps) 
           <div className="text-6xl mb-4">⚠️</div>
           <h2 className="text-xl font-semibold mb-2">Failed to load project</h2>
           <p className="text-muted-foreground mb-2">{error.message}</p>
+          <p className="text-sm text-muted-foreground/70 mb-6">Project ID: {projectId}</p>
+          <button
+            onClick={() => router.push('/dashboard')}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90"
+          >
+            Back to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data?.project) {
+    console.error('[ProjectLayout] No project data available');
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center max-w-md px-4">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h2 className="text-xl font-semibold mb-2">Project not found</h2>
+          <p className="text-muted-foreground mb-2">This project doesn't exist or you don't have access to it.</p>
           <p className="text-sm text-muted-foreground/70 mb-6">Project ID: {projectId}</p>
           <button
             onClick={() => router.push('/dashboard')}

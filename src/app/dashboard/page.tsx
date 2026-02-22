@@ -282,6 +282,7 @@ function ProjectCard({ project, view, isMenuOpen, onMenuToggle, onDelete }: Proj
   const router = useRouter();
 
   const handleClick = () => {
+    console.log('[ProjectCard] Clicked, navigating to:', `/projects/${project.id}/timeline`);
     router.push(`/projects/${project.id}/timeline`);
   };
 
