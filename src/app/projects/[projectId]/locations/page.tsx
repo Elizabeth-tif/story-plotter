@@ -439,13 +439,15 @@ function LocationFormModal({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="imageUrl">Image URL</Label>
+          <Label htmlFor="imageUrl">Image URL (optional)</Label>
           <Input
             id="imageUrl"
             {...register('imageUrl')}
-            placeholder="https://example.com/image.jpg"
-            type="url"
+            placeholder="https://example.com/image.jpg (optional)"
           />
+          {errors.imageUrl && (
+            <p className="text-sm text-destructive">{errors.imageUrl.message}</p>
+          )}
         </div>
 
         <div className="space-y-2">

@@ -325,6 +325,9 @@ function SceneFormModal({
             placeholder="Brief description of the scene..."
             rows={2}
           />
+          {errors.description && (
+            <p className="text-sm text-destructive">{errors.description.message}</p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 gap-4">
@@ -350,6 +353,9 @@ function SceneFormModal({
               {...register('location')}
               placeholder="Forest, Castle..."
             />
+            {errors.location && (
+              <p className="text-sm text-destructive">{errors.location.message}</p>
+            )}
           </div>
         </div>
 

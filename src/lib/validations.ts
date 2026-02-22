@@ -228,7 +228,12 @@ export const createLocationSchema = z.object({
     .string()
     .max(10000, 'Description must be less than 10000 characters')
     .default(''),
-  imageUrl: z.string().url().optional(),
+  imageUrl: z
+    .string()
+    .url('Must be a valid URL')
+    .optional()
+    .or(z.literal(''))
+    .transform(val => val === '' ? undefined : val),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'Invalid color format').optional(),
   tags: z.array(z.string().max(50)).max(20, 'Maximum 20 tags allowed').default([]),
   metadata: z.record(z.unknown()).default({}),
