@@ -186,6 +186,24 @@ export const storage = {
     try {
       const key = `users/${userId}/projects/${projectId}/project.json`;
       await uploadJSON(key, projectData);
+      
+      // Update project index
+      const indexKey = `users/${userId}/projects/index.json`;
+      let index = await getJSON<{ projects: Array<{ id: string; updatedAt: string }> }>(indexKey);
+      
+      if (!index) {
+        index = { projects: [] };
+      }
+      
+      // Add or update project in index
+      const existingIndex = index.projects.findIndex(p => p.id === projectId);
+      if (existingIndex >= 0) {
+        index.projects[existingIndex] = { id: projectId, updatedAt: projectData.updatedAt || new Date().toISOString() };
+      } else {
+        index.projects.push({ id: projectId, updatedAt: projectData.updatedAt || new Date().toISOString() });
+      }
+      
+      await uploadJSON(indexKey, index);
     } catch (error) {
       console.error('Error saving project to R2:', error);
       throw error;
@@ -205,6 +223,15 @@ export const storage = {
       const files = await listObjects(prefix);
       for (const file of files) {
         await deleteObject(file);
+      }
+      
+      // Update project index
+      const indexKey = `users/${userId}/projects/index.json`;
+      const index = await getJSON<{ projects: Array<{ id: string; updatedAt: string }> }>(indexKey);
+      
+      if (index && index.projects) {
+        index.projects = index.projects.filter(p => p.id !== projectId);
+        await uploadJSON(indexKey, index);
       }
     } catch (error) {
       console.error('Error deleting project from R2:', error);
