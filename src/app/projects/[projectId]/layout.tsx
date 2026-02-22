@@ -1,7 +1,7 @@
 'use client';
 
-import { use, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { use, useEffect, useState } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Sidebar, Header } from '@/components/layout';
 import { LoadingScreen } from '@/components/ui';
@@ -10,11 +10,11 @@ import type { Project } from '@/types';
 
 interface ProjectLayoutProps {
   children: React.ReactNode;
-  params: Promise<{ projectId: string }>;
 }
 
-export default function ProjectLayout({ children, params }: ProjectLayoutProps) {
-  const { projectId } = use(params);
+export default function ProjectLayout({ children }: ProjectLayoutProps) {
+  const params = useParams();
+  const projectId = params?.projectId as string;
   const router = useRouter();
   const { setProject, setLoading, setError, project } = useProjectStore();
 
