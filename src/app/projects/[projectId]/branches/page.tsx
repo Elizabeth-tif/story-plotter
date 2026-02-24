@@ -46,9 +46,9 @@ function ForkModal({ scene, projectId, onClose }: ForkModalProps) {
   return (
     <Modal isOpen onClose={onClose} title="Fork Story Arc">
       <div className="space-y-4">
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-muted-foreground">
           The new branch will inherit all scenes up to and including{' '}
-          <span className="text-white font-medium">&ldquo;{scene.title}&rdquo;</span>. You can then
+          <span className="text-foreground font-medium">&ldquo;{scene.title}&rdquo;</span>. You can then
           add new scenes to continue the story in a different direction.
         </p>
 
@@ -149,12 +149,12 @@ export default function BranchesPage() {
       <div className="mb-8">
         <div className="flex items-center gap-2 mb-1">
           <GitBranch className="w-5 h-5 text-violet-400" />
-          <h1 className="text-xl font-semibold text-white">Story Branches</h1>
+          <h1 className="text-xl font-semibold text-foreground">Story Branches</h1>
         </div>
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-muted-foreground">
           Fork the story arc at any scene to explore alternate timelines.
           {totalBranches > 0 && (
-            <span className="ml-2 text-violet-300">
+            <span className="ml-2 text-violet-500">
               {totalBranches} branch{totalBranches !== 1 ? 'es' : ''} so far.
             </span>
           )}
@@ -163,7 +163,7 @@ export default function BranchesPage() {
 
       {/* Story arc + fork indicators */}
       {sortedScenes.length === 0 ? (
-        <div className="flex flex-col items-center justify-center flex-1 text-gray-500">
+        <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground">
           <BookOpen className="w-10 h-10 mb-3 opacity-40" />
           <p className="text-sm">Add scenes to the project first, then fork the story here.</p>
         </div>
@@ -171,7 +171,7 @@ export default function BranchesPage() {
         <div className="relative">
           {/* Vertical trunk line */}
           <div
-            className="absolute left-[11px] top-4 bottom-4 w-0.5 bg-gray-700"
+            className="absolute left-[11px] top-4 bottom-4 w-0.5 bg-border"
             aria-hidden="true"
           />
 
@@ -188,8 +188,8 @@ export default function BranchesPage() {
                       className={`w-5 h-5 rounded-full border-2 flex items-center justify-center
                         ${
                           branches.length > 0
-                            ? 'border-violet-500 bg-violet-900'
-                            : 'border-gray-600 bg-gray-900'
+                            ? 'border-violet-500 bg-violet-100 dark:bg-violet-900'
+                            : 'border-border bg-background'
                         }`}
                     >
                       {branches.length > 0 && (
@@ -205,11 +205,11 @@ export default function BranchesPage() {
                     {/* Scene row */}
                     <div className="flex items-start gap-3 group">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-white truncate leading-5 pt-2.5">
+                        <p className="text-sm font-medium text-foreground truncate leading-5 pt-2.5">
                           {scene.title || `Scene ${index + 1}`}
                         </p>
                         {scene.description && (
-                          <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">
+                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
                             {scene.description}
                           </p>
                         )}
@@ -218,8 +218,8 @@ export default function BranchesPage() {
                       {/* Fork button — shown on hover */}
                       <button
                         onClick={() => setForkingScene(scene)}
-                        className="flex-none mt-2 flex items-center gap-1 text-xs text-gray-500
-                                   hover:text-violet-300 transition-colors opacity-0 group-hover:opacity-100
+                        className="flex-none mt-2 flex items-center gap-1 text-xs text-muted-foreground
+                                   hover:text-violet-600 transition-colors opacity-0 group-hover:opacity-100
                                    focus:opacity-100"
                       >
                         <GitFork className="w-3 h-3" />
@@ -243,8 +243,8 @@ export default function BranchesPage() {
             {/* End of arc — always show "Fork from end" */}
             <li className="relative flex gap-4">
               <div className="flex-none z-10 mt-1.5">
-                <div className="w-5 h-5 rounded-full border-2 border-dashed border-gray-600 bg-gray-900 flex items-center justify-center">
-                  <Plus className="w-2.5 h-2.5 text-gray-500" />
+                <div className="w-5 h-5 rounded-full border-2 border-dashed border-border bg-background flex items-center justify-center">
+                  <Plus className="w-2.5 h-2.5 text-muted-foreground" />
                 </div>
               </div>
               <div className="flex-1 pb-4 pt-0.5">
@@ -253,7 +253,7 @@ export default function BranchesPage() {
                     sortedScenes.length > 0 &&
                     setForkingScene(sortedScenes[sortedScenes.length - 1])
                   }
-                  className="text-xs text-gray-500 hover:text-violet-300 transition-colors"
+                  className="text-xs text-muted-foreground hover:text-violet-600 transition-colors"
                 >
                   + Fork from end of arc
                 </button>
@@ -264,7 +264,7 @@ export default function BranchesPage() {
       )}
 
       {isLoading && (
-        <div className="flex items-center gap-2 text-sm text-gray-500 mt-4">
+        <div className="flex items-center gap-2 text-sm text-muted-foreground mt-4">
           <Loader2 className="w-4 h-4 animate-spin" />
           Loading branches…
         </div>
@@ -295,15 +295,15 @@ function BranchCard({ branch }: { branch: ProjectSummary }) {
                  hover:bg-violet-900/40 transition-colors group/card"
       onClick={() => router.push(`/projects/${branch.id}/scenes`)}
     >
-      <GitFork className="w-3 h-3 text-violet-400 flex-none" />
+        <GitFork className="w-3 h-3 text-violet-500 flex-none" />
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium text-violet-200 truncate">
+        <p className="text-xs font-medium text-violet-700 dark:text-violet-200 truncate">
           {branch.branchName ?? branch.title}
         </p>
-        <p className="text-[10px] text-gray-500 truncate">{branch.title}</p>
+        <p className="text-[10px] text-muted-foreground truncate">{branch.title}</p>
       </div>
       <ArrowRight
-        className="w-3 h-3 text-gray-600 flex-none opacity-0 group-hover/card:opacity-100
+        className="w-3 h-3 text-muted-foreground flex-none opacity-0 group-hover/card:opacity-100
                    transition-opacity"
       />
     </div>
