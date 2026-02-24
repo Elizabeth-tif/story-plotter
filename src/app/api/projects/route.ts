@@ -37,6 +37,7 @@ export async function GET() {
       settings: p.settings || {},
       parentId: p.parentId,
       branchName: p.branchName,
+      branchPointSceneId: p.branchPointSceneId,
     }));
     
     return NextResponse.json({

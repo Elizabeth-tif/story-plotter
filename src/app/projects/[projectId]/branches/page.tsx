@@ -3,405 +3,309 @@
 import { useState, useMemo } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import {
-  GitBranch,
-  Plus,
-  BookOpen,
-  Loader2,
-  ArrowRight,
-} from 'lucide-react';
-import { format } from 'date-fns';
-import { Button, Input, Modal, Label } from '@/components/ui';
-import type { ProjectSummary } from '@/types';
+import { GitFork, Plus, BookOpen, Loader2, ArrowRight, GitBranch } from 'lucide-react';
+import { Button, Input, Label, Modal } from '@/components/ui';
+import { useProjectStore } from '@/stores';
+import type { ProjectSummary, Scene } from '@/types';
 
-// --------------------------------------------------------
-// Types
-// --------------------------------------------------------
-interface TreeNode {
-  project: ProjectSummary;
-  children: TreeNode[];
+// ──────────────────────────────────────────────────────────────────────────────
+// Fork modal
+// ──────────────────────────────────────────────────────────────────────────────
+interface ForkModalProps {
+  scene: Scene;
+  projectId: string;
+  onClose: () => void;
 }
 
-// --------------------------------------------------------
-// Build tree from flat list of projects
-// --------------------------------------------------------
-function buildTree(projects: ProjectSummary[], rootId: string): TreeNode | null {
-  const byId = new Map(projects.map((p) => [p.id, p]));
-  const childrenOf = new Map<string, ProjectSummary[]>();
-  for (const p of projects) {
-    if (p.parentId) {
-      if (!childrenOf.has(p.parentId)) childrenOf.set(p.parentId, []);
-      childrenOf.get(p.parentId)!.push(p);
-    }
-  }
-
-  function build(id: string): TreeNode | null {
-    const project = byId.get(id);
-    if (!project) return null;
-    const children = (childrenOf.get(id) || [])
-      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      .map((c) => build(c.id))
-      .filter((n): n is TreeNode => n !== null);
-    return { project, children };
-  }
-
-  return build(rootId);
-}
-
-// Walk up parentId chain to find absolute root
-function findRoot(projects: ProjectSummary[], startId: string): string {
-  const byId = new Map(projects.map((p) => [p.id, p]));
-  let id = startId;
-  while (true) {
-    const p = byId.get(id);
-    if (!p || !p.parentId) return id;
-    id = p.parentId;
-  }
-}
-
-// --------------------------------------------------------
-// Single tree node component (recursive)
-// --------------------------------------------------------
-interface TreeNodeViewProps {
-  node: TreeNode;
-  depth: number;
-  currentProjectId: string;
-  onBranch: (projectId: string) => void;
-}
-
-function TreeNodeView({ node, depth, currentProjectId, onBranch }: TreeNodeViewProps) {
+function ForkModal({ scene, projectId, onClose }: ForkModalProps) {
   const router = useRouter();
-  const isCurrent = node.project.id === currentProjectId;
-  const isRoot = !node.project.parentId;
+  const queryClient = useQueryClient();
+  const [branchName, setBranchName] = useState('');
+
+  const mutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch(`/api/projects/${projectId}/branch`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          branchName: branchName.trim() || 'New Branch',
+          branchPointSceneId: scene.id,
+        }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed');
+      return data.project as ProjectSummary;
+    },
+    onSuccess: (newProject) => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      onClose();
+      router.push(`/projects/${newProject.id}/scenes`);
+    },
+  });
 
   return (
-    <div className={`relative ${depth > 0 ? 'ml-8' : ''}`}>
-      {/* Vertical connector line from parent */}
-      {depth > 0 && (
-        <div className="absolute -left-8 top-0 bottom-1/2 w-px bg-border" />
-      )}
-      {/* Horizontal connector */}
-      {depth > 0 && (
-        <div className="absolute -left-8 top-1/2 w-8 h-px bg-border" />
-      )}
-      {/* Vertical connector to next sibling (drawn by parent) */}
+    <Modal isOpen onClose={onClose} title="Fork Story Arc">
+      <div className="space-y-4">
+        <p className="text-sm text-gray-400">
+          The new branch will inherit all scenes up to and including{' '}
+          <span className="text-white font-medium">&ldquo;{scene.title}&rdquo;</span>. You can then
+          add new scenes to continue the story in a different direction.
+        </p>
 
-      {/* Node card */}
-      <div
-        className={`relative rounded-lg border p-3 mb-2 transition-all flex items-center gap-3 ${
-          isCurrent
-            ? 'border-primary bg-primary/5 shadow-sm'
-            : 'border-border bg-card hover:border-primary/40 hover:bg-accent/30 cursor-pointer'
-        }`}
-        onClick={() => {
-          if (!isCurrent) router.push(`/projects/${node.project.id}/timeline`);
-        }}
-        role={isCurrent ? undefined : 'button'}
-        tabIndex={isCurrent ? undefined : 0}
-        onKeyDown={(e) => {
-          if (!isCurrent && (e.key === 'Enter' || e.key === ' '))
-            router.push(`/projects/${node.project.id}/timeline`);
-        }}
-      >
-        {/* Icon */}
-        <div
-          className="h-9 w-9 rounded-md flex-shrink-0 flex items-center justify-center"
-          style={{ backgroundColor: node.project.settings?.color || '#3B82F6' }}
-        >
-          {isRoot ? (
-            <BookOpen className="h-4 w-4 text-white" />
-          ) : (
-            <GitBranch className="h-4 w-4 text-white" />
-          )}
-        </div>
-
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`font-medium truncate ${isCurrent ? 'text-primary' : ''}`}>
-              {node.project.title}
-            </span>
-            {node.project.branchName && (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
-                {node.project.branchName}
-              </span>
-            )}
-            {isCurrent && (
-              <span className="text-xs px-1.5 py-0.5 rounded bg-primary text-primary-foreground font-medium">
-                current
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
-            <span>{node.project.wordCount?.toLocaleString() ?? 0} words</span>
-            <span>updated {format(new Date(node.project.updatedAt), 'MMM d, yyyy')}</span>
-            {node.children.length > 0 && (
-              <span className="flex items-center gap-1">
-                <GitBranch className="h-3 w-3" />
-                {node.children.length} {node.children.length === 1 ? 'branch' : 'branches'}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Actions */}
-        <div className="flex items-center gap-1 flex-shrink-0">
-          <Button
-            size="sm"
-            variant="outline"
-            className="gap-1 h-7 text-xs"
-            onClick={(e) => {
-              e.stopPropagation();
-              onBranch(node.project.id);
+        <div className="space-y-1">
+          <Label htmlFor="branch-name">Branch name</Label>
+          <Input
+            id="branch-name"
+            value={branchName}
+            onChange={(e) => setBranchName(e.target.value)}
+            placeholder="e.g. Dark Timeline, Alternate Ending…"
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !mutation.isPending) mutation.mutate();
             }}
-          >
-            <Plus className="h-3 w-3" />
-            Branch
+          />
+        </div>
+
+        {mutation.isError && (
+          <p className="text-sm text-red-400">{(mutation.error as Error).message}</p>
+        )}
+
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="outline" onClick={onClose} disabled={mutation.isPending}>
+            Cancel
           </Button>
-          {!isCurrent && (
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-7 w-7 p-0"
-              onClick={(e) => {
-                e.stopPropagation();
-                router.push(`/projects/${node.project.id}/timeline`);
-              }}
-              title="Open project"
-            >
-              <ArrowRight className="h-4 w-4" />
-            </Button>
-          )}
+          <Button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
+            {mutation.isPending ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Forking…
+              </>
+            ) : (
+              <>
+                <GitFork className="w-4 h-4 mr-2" />
+                Create Fork
+              </>
+            )}
+          </Button>
         </div>
       </div>
-
-      {/* Children */}
-      {node.children.length > 0 && (
-        <div className="relative">
-          {/* Vertical line connecting sibling branches */}
-          <div className="absolute left-0 top-0 bottom-4 w-px bg-border" style={{ left: -1 }} />
-          {node.children.map((child) => (
-            <TreeNodeView
-              key={child.project.id}
-              node={child}
-              depth={depth + 1}
-              currentProjectId={currentProjectId}
-              onBranch={onBranch}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+    </Modal>
   );
 }
 
-// --------------------------------------------------------
+// ──────────────────────────────────────────────────────────────────────────────
 // Main page
-// --------------------------------------------------------
+// ──────────────────────────────────────────────────────────────────────────────
 export default function BranchesPage() {
   const params = useParams();
-  const queryClient = useQueryClient();
-  const currentProjectId = params?.projectId as string;
+  const projectId = params.projectId as string;
+  const router = useRouter();
 
-  const [branchingFromId, setBranchingFromId] = useState<string | null>(null);
-  const [branchName, setBranchName] = useState('');
-  const [branchTitle, setBranchTitle] = useState('');
+  // Current project's scenes from the Zustand store
+  const scenes = useProjectStore((s) => s.project?.scenes ?? []);
+  const projectTitle = useProjectStore((s) => s.project?.title ?? '');
 
-  // Fetch all user projects (we need them to build the full tree)
-  const { data, isLoading } = useQuery({
+  // All projects (to find child branches of this project)
+  const { data: projectsData, isLoading } = useQuery<{ projects: ProjectSummary[] }>({
     queryKey: ['projects'],
     queryFn: async () => {
       const res = await fetch('/api/projects');
-      if (!res.ok) throw new Error('Failed to fetch projects');
-      return res.json() as Promise<{ projects: ProjectSummary[] }>;
+      return res.json();
     },
     staleTime: 30_000,
   });
 
-  const createBranchMutation = useMutation({
-    mutationFn: async ({
-      projectId,
-      branchName,
-      title,
-    }: {
-      projectId: string;
-      branchName: string;
-      title: string;
-    }) => {
-      const res = await fetch(`/api/projects/${projectId}/branch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ branchName, title }),
-      });
-      if (!res.ok) throw new Error('Failed to create branch');
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      setBranchingFromId(null);
-      setBranchName('');
-      setBranchTitle('');
-    },
-  });
+  // Child branches of this project, keyed by their branchPointSceneId
+  const branchesBySceneId = useMemo(() => {
+    const map = new Map<string, ProjectSummary[]>();
+    for (const p of projectsData?.projects ?? []) {
+      if (p.parentId === projectId && p.branchPointSceneId) {
+        const existing = map.get(p.branchPointSceneId) ?? [];
+        map.set(p.branchPointSceneId, [...existing, p]);
+      }
+    }
+    return map;
+  }, [projectsData, projectId]);
 
-  // Build the tree
-  const tree = useMemo(() => {
-    const projects = data?.projects ?? [];
-    if (!projects.length) return null;
-    const rootId = findRoot(projects, currentProjectId);
-    return buildTree(projects, rootId);
-  }, [data, currentProjectId]);
+  // Scenes sorted chronologically
+  const sortedScenes = useMemo(
+    () =>
+      [...scenes].sort((a, b) => {
+        const pa = a.timelinePosition ?? a.order;
+        const pb = b.timelinePosition ?? b.order;
+        return pa - pb;
+      }),
+    [scenes]
+  );
 
-  const branchingFromProject = useMemo(() => {
-    if (!branchingFromId) return null;
-    return data?.projects.find((p) => p.id === branchingFromId) ?? null;
-  }, [branchingFromId, data]);
+  // Fork modal state
+  const [forkingScene, setForkingScene] = useState<Scene | null>(null);
 
-  const handleOpenBranchModal = (projectId: string) => {
-    const parent = data?.projects.find((p) => p.id === projectId);
-    setBranchingFromId(projectId);
-    setBranchName('');
-    setBranchTitle(parent ? `${parent.title} — ` : '');
-  };
-
-  const handleCreateBranch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!branchingFromId || !branchName.trim()) return;
-    createBranchMutation.mutate({
-      projectId: branchingFromId,
-      branchName: branchName.trim(),
-      title: branchTitle.trim() || `${branchingFromProject?.title ?? 'Project'} — ${branchName.trim()}`,
-    });
-  };
+  const totalBranches = projectsData?.projects.filter((p) => p.parentId === projectId).length ?? 0;
 
   return (
-    <div className="p-6">
+    <div className="flex flex-col h-full p-6 overflow-y-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <GitBranch className="h-6 w-6" />
-            Story Branches
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Explore alternate storylines branching from your original story
-          </p>
+      <div className="mb-8">
+        <div className="flex items-center gap-2 mb-1">
+          <GitBranch className="w-5 h-5 text-violet-400" />
+          <h1 className="text-xl font-semibold text-white">Story Branches</h1>
         </div>
-        <Button
-          className="gap-2"
-          onClick={() => handleOpenBranchModal(currentProjectId)}
-        >
-          <Plus className="h-4 w-4" />
-          New Branch
-        </Button>
+        <p className="text-sm text-gray-400">
+          Fork the story arc at any scene to explore alternate timelines.
+          {totalBranches > 0 && (
+            <span className="ml-2 text-violet-300">
+              {totalBranches} branch{totalBranches !== 1 ? 'es' : ''} so far.
+            </span>
+          )}
+        </p>
       </div>
 
-      {/* Tree */}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
-          <Loader2 className="h-5 w-5 animate-spin" />
-          Loading story tree...
+      {/* Story arc + fork indicators */}
+      {sortedScenes.length === 0 ? (
+        <div className="flex flex-col items-center justify-center flex-1 text-gray-500">
+          <BookOpen className="w-10 h-10 mb-3 opacity-40" />
+          <p className="text-sm">Add scenes to the project first, then fork the story here.</p>
         </div>
-      ) : !tree ? (
-        <EmptyState onBranch={() => handleOpenBranchModal(currentProjectId)} />
       ) : (
-        <div className="max-w-2xl">
-          <p className="text-xs text-muted-foreground mb-4 font-medium uppercase tracking-wider">
-            Story tree
-          </p>
-          <TreeNodeView
-            node={tree}
-            depth={0}
-            currentProjectId={currentProjectId}
-            onBranch={handleOpenBranchModal}
+        <div className="relative">
+          {/* Vertical trunk line */}
+          <div
+            className="absolute left-[11px] top-4 bottom-4 w-0.5 bg-gray-700"
+            aria-hidden="true"
           />
+
+          <ol className="space-y-0">
+            {sortedScenes.map((scene, index) => {
+              const branches = branchesBySceneId.get(scene.id) ?? [];
+              const isLast = index === sortedScenes.length - 1;
+
+              return (
+                <li key={scene.id} className="relative flex gap-4">
+                  {/* Node dot */}
+                  <div className="flex-none z-10 mt-3.5">
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center
+                        ${
+                          branches.length > 0
+                            ? 'border-violet-500 bg-violet-900'
+                            : 'border-gray-600 bg-gray-900'
+                        }`}
+                    >
+                      {branches.length > 0 && (
+                        <GitFork className="w-2.5 h-2.5 text-violet-300" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Scene card area */}
+                  <div
+                    className={`flex-1 min-w-0 pb-4 ${isLast ? '' : ''}`}
+                  >
+                    {/* Scene row */}
+                    <div className="flex items-start gap-3 group">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-white truncate leading-5 pt-2.5">
+                          {scene.title || `Scene ${index + 1}`}
+                        </p>
+                        {scene.description && (
+                          <p className="text-xs text-gray-500 mt-0.5 line-clamp-1">
+                            {scene.description}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Fork button — shown on hover */}
+                      <button
+                        onClick={() => setForkingScene(scene)}
+                        className="flex-none mt-2 flex items-center gap-1 text-xs text-gray-500
+                                   hover:text-violet-300 transition-colors opacity-0 group-hover:opacity-100
+                                   focus:opacity-100"
+                      >
+                        <GitFork className="w-3 h-3" />
+                        Fork here
+                      </button>
+                    </div>
+
+                    {/* Existing branch cards at this fork point */}
+                    {branches.length > 0 && (
+                      <div className="mt-2 ml-1 space-y-1.5">
+                        {branches.map((branch) => (
+                          <BranchCard key={branch.id} branch={branch} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+
+            {/* End of arc — always show "Fork from end" */}
+            <li className="relative flex gap-4">
+              <div className="flex-none z-10 mt-1.5">
+                <div className="w-5 h-5 rounded-full border-2 border-dashed border-gray-600 bg-gray-900 flex items-center justify-center">
+                  <Plus className="w-2.5 h-2.5 text-gray-500" />
+                </div>
+              </div>
+              <div className="flex-1 pb-4 pt-0.5">
+                <button
+                  onClick={() =>
+                    sortedScenes.length > 0 &&
+                    setForkingScene(sortedScenes[sortedScenes.length - 1])
+                  }
+                  className="text-xs text-gray-500 hover:text-violet-300 transition-colors"
+                >
+                  + Fork from end of arc
+                </button>
+              </div>
+            </li>
+          </ol>
         </div>
       )}
 
-      {/* Create Branch Modal */}
-      <Modal
-        isOpen={!!branchingFromId}
-        onClose={() => setBranchingFromId(null)}
-        title="Create Branch"
-        description={
-          branchingFromProject
-            ? `Branch off from "${branchingFromProject.title}"`
-            : 'Create a new story branch'
-        }
-      >
-        <form onSubmit={handleCreateBranch} className="space-y-4 mt-4">
-          <div className="space-y-2">
-            <Label htmlFor="branchName">Branch Name</Label>
-            <Input
-              id="branchName"
-              value={branchName}
-              onChange={(e) => setBranchName(e.target.value)}
-              placeholder="e.g. Alternative Ending, Dark Timeline..."
-              required
-              autoFocus
-            />
-            <p className="text-xs text-muted-foreground">
-              A short label to identify this story fork
-            </p>
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="branchTitle">Project Title (optional)</Label>
-            <Input
-              id="branchTitle"
-              value={branchTitle}
-              onChange={(e) => setBranchTitle(e.target.value)}
-              placeholder="Leave blank to auto-generate"
-            />
-          </div>
-          <div className="rounded-md border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
-            <p className="font-medium text-foreground mb-1">What gets copied</p>
-            <ul className="list-disc list-inside space-y-0.5">
-              <li>All scenes, characters, plotlines</li>
-              <li>Locations, notes, timeline</li>
-              <li>Project settings and genre</li>
-            </ul>
-            <p className="mt-2">Changes in the branch won't affect the original.</p>
-          </div>
-          <div className="flex justify-end gap-3 pt-2">
-            <Button type="button" variant="outline" onClick={() => setBranchingFromId(null)}>
-              Cancel
-            </Button>
-            <Button
-              type="submit"
-              disabled={!branchName.trim() || createBranchMutation.isPending}
-              className="gap-2"
-            >
-              {createBranchMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Branching...
-                </>
-              ) : (
-                <>
-                  <GitBranch className="h-4 w-4" />
-                  Create Branch
-                </>
-              )}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      {isLoading && (
+        <div className="flex items-center gap-2 text-sm text-gray-500 mt-4">
+          <Loader2 className="w-4 h-4 animate-spin" />
+          Loading branches…
+        </div>
+      )}
+
+      {/* Fork modal */}
+      {forkingScene && (
+        <ForkModal
+          scene={forkingScene}
+          projectId={projectId}
+          onClose={() => setForkingScene(null)}
+        />
+      )}
     </div>
   );
 }
 
-function EmptyState({ onBranch }: { onBranch: () => void }) {
+// ──────────────────────────────────────────────────────────────────────────────
+// Branch card component
+// ──────────────────────────────────────────────────────────────────────────────
+function BranchCard({ branch }: { branch: ProjectSummary }) {
+  const router = useRouter();
+
   return (
-    <div className="text-center py-12">
-      <GitBranch className="h-16 w-16 mx-auto text-muted-foreground/50 mb-4" />
-      <h2 className="text-xl font-semibold mb-2">No branches yet</h2>
-      <p className="text-muted-foreground mb-6 max-w-sm mx-auto">
-        Create a branch to explore an alternate version of your story without losing the original.
-      </p>
-      <Button onClick={onBranch} className="gap-2">
-        <Plus className="h-4 w-4" />
-        Create First Branch
-      </Button>
+    <div
+      className="flex items-center gap-2 bg-violet-950/40 border border-violet-800/40
+                 rounded-md px-3 py-2 cursor-pointer hover:border-violet-600/60
+                 hover:bg-violet-900/40 transition-colors group/card"
+      onClick={() => router.push(`/projects/${branch.id}/scenes`)}
+    >
+      <GitFork className="w-3 h-3 text-violet-400 flex-none" />
+      <div className="flex-1 min-w-0">
+        <p className="text-xs font-medium text-violet-200 truncate">
+          {branch.branchName ?? branch.title}
+        </p>
+        <p className="text-[10px] text-gray-500 truncate">{branch.title}</p>
+      </div>
+      <ArrowRight
+        className="w-3 h-3 text-gray-600 flex-none opacity-0 group-hover/card:opacity-100
+                   transition-opacity"
+      />
     </div>
   );
 }

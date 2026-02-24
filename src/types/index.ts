@@ -46,6 +46,7 @@ export interface ProjectSummary {
   // Branch / tree fields
   parentId?: string;
   branchName?: string;
+  branchPointSceneId?: string; // scene in parent where this branch diverges
 }
 
 export interface ProjectSettings {
@@ -83,6 +84,7 @@ export interface Project {
   // Branch / tree fields
   parentId?: string;
   branchName?: string;
+  branchPointSceneId?: string; // scene in parent where this branch diverges
 }
 
 // ============================================
