@@ -73,6 +73,7 @@ interface ProjectState {
   addTimelineEvent: (event: TimelineEvent) => void;
   updateTimelineEvent: (id: string, updates: Partial<TimelineEvent>) => void;
   deleteTimelineEvent: (id: string) => void;
+  reorderTimeline: (orderedSceneIds: string[]) => void;
   
   // Computed
   getCharacterById: (id: string) => Character | undefined;
@@ -433,6 +434,33 @@ export const useProjectStore = create<ProjectState>()(
             ...state.project.timeline,
             events: state.project.timeline.events.filter((e) => e.id !== id),
           },
+        },
+        isDirty: true,
+      };
+    }),
+
+    reorderTimeline: (orderedSceneIds) => set((state) => {
+      if (!state.project) return state;
+      // Update timelinePosition on each scene based on new order
+      const positionMap = new Map(orderedSceneIds.map((id, index) => [id, index]));
+      const updatedScenes = state.project.scenes.map((scene) => {
+        const newPos = positionMap.get(scene.id);
+        if (newPos !== undefined) {
+          return { ...scene, timelinePosition: newPos };
+        }
+        return scene;
+      });
+      // Re-order the events array to match new positions
+      const updatedEvents = [...state.project.timeline.events].sort((a, b) => {
+        const posA = positionMap.get(a.sceneId) ?? Infinity;
+        const posB = positionMap.get(b.sceneId) ?? Infinity;
+        return posA - posB;
+      }).map((e, index) => ({ ...e, position: index }));
+      return {
+        project: {
+          ...state.project,
+          scenes: updatedScenes,
+          timeline: { ...state.project.timeline, events: updatedEvents },
         },
         isDirty: true,
       };
