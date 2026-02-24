@@ -190,10 +190,17 @@ export const storage = {
     }
     
     try {
-      console.log('[Storage] Saving project to R2:', projectId);
+      console.log('[Storage] Saving project to R2:', projectId, {
+        characters: projectData.characters?.length || 0,
+        scenes: projectData.scenes?.length || 0,
+        plotlines: projectData.plotlines?.length || 0,
+        locations: projectData.locations?.length || 0,
+        notes: projectData.notes?.length || 0,
+        timelineEvents: projectData.timeline?.events?.length || 0,
+      });
       const key = `users/${userId}/projects/${projectId}/project.json`;
       await uploadJSON(key, projectData);
-      console.log('[Storage] Project file uploaded:', key);
+      console.log('[Storage] Project file uploaded successfully:', key);
       
       // Update project index
       const indexKey = `users/${userId}/projects/index.json`;

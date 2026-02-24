@@ -61,9 +61,11 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 // PUT /api/projects/[projectId] - Update project (full save)
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
+    console.log('[API Project PUT] Starting update...');
     const session = await auth();
     
     if (!session?.user?.id) {
+      console.log('[API Project PUT] Unauthorized - no session');
       return NextResponse.json(
         { success: false, error: 'Unauthorized' },
         { status: 401 }
@@ -79,6 +81,17 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       lastKnownTimestamp: string;
       forceOverwrite?: boolean;
     };
+    
+    console.log('[API Project PUT] Received project update:', {
+      projectId,
+      userId,
+      characters: clientProject.characters?.length || 0,
+      scenes: clientProject.scenes?.length || 0,
+      plotlines: clientProject.plotlines?.length || 0,
+      locations: clientProject.locations?.length || 0,
+      notes: clientProject.notes?.length || 0,
+      timelineEvents: clientProject.timeline?.events?.length || 0,
+    });
     
     // Get current project from storage
     const serverProject = await storage.getProject(userId, projectId);
@@ -125,8 +138,21 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
       version: newVersion,
     };
     
+    console.log('[API Project PUT] Saving updated project:', {
+      projectId,
+      version: newVersion,
+      characters: updatedProject.characters?.length || 0,
+      scenes: updatedProject.scenes?.length || 0,
+      plotlines: updatedProject.plotlines?.length || 0,
+      locations: updatedProject.locations?.length || 0,
+      notes: updatedProject.notes?.length || 0,
+      timelineEvents: updatedProject.timeline?.events?.length || 0,
+    });
+    
     // Save to storage
     await storage.setProject(userId, projectId, updatedProject);
+    
+    console.log('[API Project PUT] Project saved successfully to R2');
     
     return NextResponse.json({
       success: true,

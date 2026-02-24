@@ -10,11 +10,11 @@ interface UseAutoSaveOptions {
 }
 
 export function useAutoSave({
-  interval = 30000, // 30 seconds default
+  interval = 5000, // 5 seconds default - changed from 30s to save more frequently
   onSave,
   enabled = true,
 }: UseAutoSaveOptions = {}) {
-  const { isDirty, isSaving, setSaving, project: currentProject, markClean, updateProjectMeta } = useProjectStore();
+  const { isDirty, isSaving, setSaving, project: currentProject, markClean } = useProjectStore();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const isSavingRef = useRef(false);
 
@@ -32,7 +32,13 @@ export function useAutoSave({
         markClean(new Date().toISOString());
       } else {
         // Default save behavior
-        console.log('[AutoSave] Saving project:', currentProject.id);
+        console.log('[AutoSave] Saving project:', currentProject.id, {
+          characters: currentProject.characters?.length || 0,
+          scenes: currentProject.scenes?.length || 0,
+          plotlines: currentProject.plotlines?.length || 0,
+          locations: currentProject.locations?.length || 0,
+          notes: currentProject.notes?.length || 0,
+        });
         const response = await fetch(`/api/projects/${currentProject.id}`, {
           method: 'PUT',
           headers: {
@@ -41,6 +47,7 @@ export function useAutoSave({
           body: JSON.stringify({
             project: currentProject,
             lastKnownTimestamp: currentProject.updatedAt,
+            forceOverwrite: false, // Allow conflict detection but don't force
           }),
         });
 
@@ -57,8 +64,10 @@ export function useAutoSave({
         }
 
         const data = await response.json();
-        console.log('[AutoSave] Save successful, new timestamp:', data.timestamp);
-        markClean(data.timestamp);
+        console.log('[AutoSave] Save successful, new timestamp:', data.timestamp, 'version:', data.version);
+        
+        // Update store with new server timestamp and version
+        markClean(data.timestamp, data.version);
       }
 
       setSaving(false);
@@ -68,7 +77,7 @@ export function useAutoSave({
     } finally {
       isSavingRef.current = false;
     }
-  }, [isDirty, currentProject, onSave, setSaving, enabled, markClean, updateProjectMeta]);
+  }, [isDirty, currentProject, onSave, setSaving, enabled, markClean]);
 
   // Set up auto-save interval
   useEffect(() => {
@@ -115,11 +124,12 @@ export function useAutoSave({
     };
   }, [isDirty, save]);
 
-  // Save when visibility changes (tab switching)
+  // Save when visibility changes (tab switching) - CRITICAL: save IMMEDIATELY before refetch
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (document.hidden && isDirty) {
-        save();
+        console.log('[AutoSave] Visibility changed, saving immediately...');
+        await save();
       }
     };
 
@@ -129,6 +139,22 @@ export function useAutoSave({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [isDirty, save]);
+
+  // Save when window loses focus (additional safety)
+  useEffect(() => {
+    const handleBlur = async () => {
+      if (isDirty && enabled) {
+        console.log('[AutoSave] Window blur detected, saving immediately...');
+        await save();
+      }
+    };
+
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      window.removeEventListener('blur', handleBlur);
+    };
+  }, [isDirty, enabled, save]);
 
   return {
     save,

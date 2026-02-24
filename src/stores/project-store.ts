@@ -34,7 +34,7 @@ interface ProjectState {
   
   // Actions - Save state
   markDirty: () => void;
-  markClean: (timestamp: string) => void;
+  markClean: (timestamp: string, version?: number) => void;
   setSaving: (saving: boolean) => void;
   setSaveError: (error: string | null) => void;
   setLastKnownTimestamp: (timestamp: string) => void;
@@ -116,11 +116,17 @@ export const useProjectStore = create<ProjectState>()(
     
     // Save state actions
     markDirty: () => set({ isDirty: true }),
-    markClean: (timestamp) => set({ 
+    markClean: (timestamp, version) => set((state) => ({ 
       isDirty: false, 
       lastSavedAt: timestamp,
-      lastKnownTimestamp: timestamp 
-    }),
+      lastKnownTimestamp: timestamp,
+      // CRITICAL: Update project's updatedAt and version to match server
+      project: state.project ? { 
+        ...state.project, 
+        updatedAt: timestamp,
+        ...(version !== undefined && { version }),
+      } : null,
+    })),
     setSaving: (isSaving) => set({ isSaving }),
     setSaveError: (saveError) => set({ saveError }),
     setLastKnownTimestamp: (timestamp) => set({ lastKnownTimestamp: timestamp }),

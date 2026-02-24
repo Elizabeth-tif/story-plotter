@@ -43,6 +43,8 @@ export default function ProjectLayout({ children }: ProjectLayoutProps) {
       return result;
     },
     retry: false,
+    refetchOnWindowFocus: false, // CRITICAL: Prevent refetch that overwrites unsaved changes
+    refetchOnReconnect: false, // Prevent refetch on reconnect that could overwrite changes
   });
 
   useEffect(() => {
@@ -58,6 +60,13 @@ export default function ProjectLayout({ children }: ProjectLayoutProps) {
   useEffect(() => {
     if (data?.project) {
       console.log('[ProjectLayout] Setting project in store:', data.project.id);
+      console.log('[ProjectLayout] Project has:', {
+        characters: data.project.characters?.length || 0,
+        scenes: data.project.scenes?.length || 0,
+        plotlines: data.project.plotlines?.length || 0,
+        locations: data.project.locations?.length || 0,
+        notes: data.project.notes?.length || 0,
+      });
       setProject(data.project as Project);
     } else if (data && !data.project) {
       console.error('[ProjectLayout] API returned success but no project data:', data);
@@ -66,7 +75,7 @@ export default function ProjectLayout({ children }: ProjectLayoutProps) {
 
   // Enable auto-save for this project
   useAutoSave({
-    interval: 30000, // Save every 30 seconds
+    interval: 5000, // Save every 5 seconds (changed from 30s to prevent data loss)
     enabled: !!project,
   });
 
