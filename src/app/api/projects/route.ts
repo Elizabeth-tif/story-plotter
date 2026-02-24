@@ -35,6 +35,8 @@ export async function GET() {
       archived: p.archived ?? false,
       wordCount: p.wordCount ?? 0,
       settings: p.settings || {},
+      parentId: p.parentId,
+      branchName: p.branchName,
     }));
     
     return NextResponse.json({

@@ -43,6 +43,9 @@ export interface ProjectSummary {
   archived: boolean;
   wordCount: number;
   settings: ProjectSettings;
+  // Branch / tree fields
+  parentId?: string;
+  branchName?: string;
 }
 
 export interface ProjectSettings {
@@ -77,6 +80,9 @@ export interface Project {
   locations: Location[];
   timeline: Timeline;
   notes: Note[];
+  // Branch / tree fields
+  parentId?: string;
+  branchName?: string;
 }
 
 // ============================================

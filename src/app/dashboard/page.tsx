@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -16,6 +16,7 @@ import {
   Copy,
   Edit,
   FolderOpen,
+  GitFork,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { 
@@ -107,6 +108,22 @@ export default function DashboardPage() {
   };
 
   const projects: ProjectSummary[] = data?.projects || [];
+  
+  // Compute branch counts per project id
+  const branchCountById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const p of projects) {
+      if (p.parentId) {
+        map.set(p.parentId, (map.get(p.parentId) ?? 0) + 1);
+      }
+    }
+    return map;
+  }, [projects]);
+
+  const projectById = useMemo(
+    () => new Map(projects.map((p) => [p.id, p])),
+    [projects]
+  );
   
   // Filter projects by search query
   const filteredProjects = projects.filter(
@@ -212,6 +229,8 @@ export default function DashboardPage() {
                 isMenuOpen={menuOpenId === project.id}
                 onMenuToggle={() => setMenuOpenId(menuOpenId === project.id ? null : project.id)}
                 onDelete={() => deleteProjectMutation.mutate(project.id)}
+                branchCount={branchCountById.get(project.id) ?? 0}
+                parentTitle={project.parentId ? (projectById.get(project.parentId)?.title ?? null) : null}
               />
             ))}
           </div>
@@ -276,9 +295,11 @@ interface ProjectCardProps {
   isMenuOpen: boolean;
   onMenuToggle: () => void;
   onDelete: () => void;
+  branchCount: number;
+  parentTitle: string | null;
 }
 
-function ProjectCard({ project, view, isMenuOpen, onMenuToggle, onDelete }: ProjectCardProps) {
+function ProjectCard({ project, view, isMenuOpen, onMenuToggle, onDelete, branchCount, parentTitle }: ProjectCardProps) {
   const router = useRouter();
 
   const handleClick = () => {
@@ -289,7 +310,10 @@ function ProjectCard({ project, view, isMenuOpen, onMenuToggle, onDelete }: Proj
   if (view === 'list') {
     return (
       <Card
-        className="cursor-pointer hover:border-primary/50 transition-colors"
+        className={`cursor-pointer transition-colors hover:border-primary/50 ${
+          project.parentId ? 'border-l-4' : ''
+        }`}
+        style={project.parentId ? { borderLeftColor: project.settings.color || '#3B82F6' } : undefined}
         onClick={handleClick}
       >
         <CardContent className="p-4">
@@ -299,12 +323,35 @@ function ProjectCard({ project, view, isMenuOpen, onMenuToggle, onDelete }: Proj
                 className="h-10 w-10 rounded-lg flex-shrink-0 flex items-center justify-center"
                 style={{ backgroundColor: project.settings.color || '#3B82F6' }}
               >
-                <BookOpen className="h-5 w-5 text-white" />
+                {project.parentId ? (
+                  <GitFork className="h-5 w-5 text-white" />
+                ) : (
+                  <BookOpen className="h-5 w-5 text-white" />
+                )}
               </div>
               <div className="min-w-0">
-                <h3 className="font-semibold truncate">{project.title}</h3>
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                  <h3 className="font-semibold truncate">{project.title}</h3>
+                  {project.branchName && (
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono flex-shrink-0">
+                      {project.branchName}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground flex-wrap">
                   {project.genre && <Badge variant="secondary">{project.genre}</Badge>}
+                  {parentTitle && (
+                    <span className="flex items-center gap-1 text-xs">
+                      <GitFork className="h-3 w-3" />
+                      {parentTitle}
+                    </span>
+                  )}
+                  {branchCount > 0 && (
+                    <span className="flex items-center gap-1 text-xs">
+                      <GitFork className="h-3 w-3" />
+                      {branchCount} {branchCount === 1 ? 'branch' : 'branches'}
+                    </span>
+                  )}
                   <span>{project.wordCount.toLocaleString()} words</span>
                   <span>•</span>
                   <span>Updated {format(new Date(project.updatedAt), 'MMM d, yyyy')}</span>
@@ -334,7 +381,10 @@ function ProjectCard({ project, view, isMenuOpen, onMenuToggle, onDelete }: Proj
 
   return (
     <Card
-      className="cursor-pointer hover:border-primary/50 transition-colors group"
+      className={`cursor-pointer transition-colors group hover:border-primary/50 ${
+        project.parentId ? 'border-l-4' : ''
+      }`}
+      style={project.parentId ? { borderLeftColor: project.settings.color || '#3B82F6' } : undefined}
       onClick={handleClick}
     >
       <CardContent className="p-4">
@@ -343,7 +393,11 @@ function ProjectCard({ project, view, isMenuOpen, onMenuToggle, onDelete }: Proj
             className="h-12 w-12 rounded-lg flex items-center justify-center"
             style={{ backgroundColor: project.settings.color || '#3B82F6' }}
           >
-            <BookOpen className="h-6 w-6 text-white" />
+            {project.parentId ? (
+              <GitFork className="h-6 w-6 text-white" />
+            ) : (
+              <BookOpen className="h-6 w-6 text-white" />
+            )}
           </div>
           <div className="relative">
             <Button
@@ -362,17 +416,38 @@ function ProjectCard({ project, view, isMenuOpen, onMenuToggle, onDelete }: Proj
             )}
           </div>
         </div>
-        <h3 className="font-semibold truncate mb-1">{project.title}</h3>
-        {project.genre && (
-          <Badge variant="secondary" className="mb-2">
-            {project.genre}
-          </Badge>
+        <div className="flex items-center gap-2 mb-1 flex-wrap">
+          <h3 className="font-semibold truncate">{project.title}</h3>
+          {project.branchName && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+              {project.branchName}
+            </span>
+          )}
+        </div>
+        {(project.genre || parentTitle) && (
+          <div className="flex items-center gap-2 mb-2 flex-wrap">
+            {project.genre && <Badge variant="secondary">{project.genre}</Badge>}
+            {parentTitle && (
+              <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                <GitFork className="h-3 w-3" />
+                {parentTitle}
+              </span>
+            )}
+          </div>
         )}
         <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
           {project.description || 'No description'}
         </p>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>{project.wordCount.toLocaleString()} words</span>
+          <div className="flex items-center gap-2">
+            <span>{project.wordCount.toLocaleString()} words</span>
+            {branchCount > 0 && (
+              <span className="flex items-center gap-1">
+                <GitFork className="h-3 w-3" />
+                {branchCount}
+              </span>
+            )}
+          </div>
           <span>{format(new Date(project.updatedAt), 'MMM d')}</span>
         </div>
       </CardContent>

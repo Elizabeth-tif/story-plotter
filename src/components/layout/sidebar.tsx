@@ -8,6 +8,7 @@ import {
   FileText,
   MapPin,
   GitBranch,
+  GitFork,
   Clock,
   StickyNote,
   Settings,
@@ -28,6 +29,7 @@ const navItems = [
   { name: 'Plotlines', href: 'plotlines', icon: GitBranch },
   { name: 'Locations', href: 'locations', icon: MapPin },
   { name: 'Notes', href: 'notes', icon: StickyNote },
+  { name: 'Branches', href: 'branches', icon: GitFork },
   { name: 'Settings', href: 'settings', icon: Settings },
 ];
 
