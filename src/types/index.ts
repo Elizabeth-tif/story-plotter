@@ -81,10 +81,12 @@ export interface Project {
   locations: Location[];
   timeline: Timeline;
   notes: Note[];
-  // Branch / tree fields
+  // Intra-project branch tree
+  branches?: StoryBranch[];
+  // Legacy inter-project branch fields (kept for backwards compat)
   parentId?: string;
   branchName?: string;
-  branchPointSceneId?: string; // scene in parent where this branch diverges
+  branchPointSceneId?: string;
 }
 
 // ============================================
@@ -188,6 +190,27 @@ export interface Location {
   order: number;
   createdAt?: string;
   updatedAt?: string;
+}
+
+// ============================================
+// Story Branch Types (intra-project)
+// ============================================
+
+/**
+ * A StoryBranch lives inside a single Project.
+ * It diverges from the main scene list at `branchPointSceneId`
+ * and carries its own `scenes` array (the divergent story).
+ */
+export interface StoryBranch {
+  id: string;
+  name: string;
+  color?: string;
+  /** Scene ID in the main trunk (project.scenes) where this branch forks off */
+  branchPointSceneId: string;
+  /** Scenes that are unique to this branch (written after the fork point) */
+  scenes: Scene[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 // ============================================

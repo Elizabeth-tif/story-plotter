@@ -21,22 +21,31 @@ import {
   arrayMove,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { useProjectStore, useScenes } from '@/stores';
+import { useProjectStore, useScenes, useBranches } from '@/stores';
 import { Card, CardContent, Badge } from '@/components/ui';
-import { Clock, Plus, GripVertical } from 'lucide-react';
+import {
+  Clock,
+  Plus,
+  GripVertical,
+  GitBranch,
+  Circle,
+  ChevronDown,
+  ChevronRight,
+} from 'lucide-react';
 import { Button } from '@/components/ui';
-import type { Scene } from '@/types';
+import type { Scene, StoryBranch } from '@/types';
 
 // ============================================================
-// Sortable timeline item
+// Sortable trunk item
 // ============================================================
-interface TimelineItemProps {
+interface TrunkItemProps {
   scene: Scene;
   index: number;
   povCharacterName?: string;
+  branchesAtNode: StoryBranch[];
 }
 
-function TimelineItem({ scene, index, povCharacterName }: TimelineItemProps) {
+function TrunkItem({ scene, index, povCharacterName, branchesAtNode }: TrunkItemProps) {
   const {
     attributes,
     listeners,
@@ -53,35 +62,175 @@ function TimelineItem({ scene, index, povCharacterName }: TimelineItemProps) {
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="relative flex gap-4 pl-4">
-      {/* Timeline dot */}
+    <div ref={setNodeRef} style={style}>
+      {/* Main trunk row */}
+      <div className="relative flex gap-4 pl-4">
+        {/* Timeline dot */}
+        <div
+          className={`absolute left-6 top-4 h-4 w-4 rounded-full border-4 border-background z-10 flex-shrink-0
+            ${branchesAtNode.length > 0 ? 'ring-2 ring-violet-500/60' : ''}`}
+          style={{ backgroundColor: scene.color || '#3B82F6' }}
+        />
+
+        <Card
+          className={`flex-1 ml-8 transition-all ${
+            isDragging ? 'border-primary shadow-lg' : 'hover:border-primary/50'
+          }`}
+        >
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <button
+                {...attributes}
+                {...listeners}
+                className="mt-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground flex-shrink-0 touch-none"
+                aria-label="Drag to reorder"
+              >
+                <GripVertical className="h-5 w-5" />
+              </button>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <h3 className="font-semibold truncate">{scene.title}</h3>
+                  <Badge
+                    variant={
+                      scene.status === 'complete'
+                        ? 'success'
+                        : scene.status === 'in-progress'
+                        ? 'warning'
+                        : 'secondary'
+                    }
+                  >
+                    {scene.status}
+                  </Badge>
+                  {branchesAtNode.length > 0 && (
+                    <Badge variant="outline" className="gap-1 text-violet-500 border-violet-500/40">
+                      <GitBranch className="w-2.5 h-2.5" />
+                      {branchesAtNode.length}
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+                  {scene.description || 'No description'}
+                </p>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  {povCharacterName && <span>POV: {povCharacterName}</span>}
+                  {scene.location && <span>📍 {scene.location}</span>}
+                  {scene.timestamp && <span>🕐 {scene.timestamp}</span>}
+                  <span>{scene.wordCount.toLocaleString()} words</span>
+                </div>
+              </div>
+
+              <div className="flex-shrink-0 text-sm font-mono text-muted-foreground bg-muted rounded px-1.5 py-0.5">
+                #{index + 1}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Branch sub-trees at this node */}
+      {branchesAtNode.map((branch) => (
+        <BranchSubTree key={branch.id} branch={branch} />
+      ))}
+    </div>
+  );
+}
+
+// ============================================================
+// Branch sub-tree (indented, collapsible)
+// ============================================================
+function BranchSubTree({ branch }: { branch: StoryBranch }) {
+  const [expanded, setExpanded] = useState(true);
+
+  return (
+    <div className="ml-14 mt-1 mb-2">
+      {/* Branch connector line */}
+      <div className="relative">
+        {/* Horizontal connector */}
+        <div className="absolute left-0 top-4 w-4 h-0.5 bg-border" />
+
+        {/* Branch label row */}
+        <div className="pl-6">
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-1.5 text-xs font-medium mb-1.5 hover:opacity-80 transition-opacity"
+            style={{ color: branch.color ?? '#8B5CF6' }}
+          >
+            <Circle
+              className="w-2.5 h-2.5 flex-shrink-0"
+              style={{ fill: branch.color ?? '#8B5CF6', color: branch.color ?? '#8B5CF6' }}
+            />
+            <span>{branch.name}</span>
+            <span className="text-muted-foreground font-normal">
+              ({branch.scenes.length} scene{branch.scenes.length !== 1 ? 's' : ''})
+            </span>
+            {expanded ? (
+              <ChevronDown className="w-3 h-3 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="w-3 h-3 text-muted-foreground" />
+            )}
+          </button>
+
+          {expanded && (
+            <div className="relative">
+              {/* Vertical branch line */}
+              {branch.scenes.length > 0 && (
+                <div
+                  className="absolute left-[-3px] top-0 bottom-4 w-0.5"
+                  style={{ backgroundColor: branch.color ?? '#8B5CF6', opacity: 0.4 }}
+                />
+              )}
+
+              {branch.scenes.length === 0 ? (
+                <p className="text-xs text-muted-foreground pl-2 pb-2">
+                  No scenes yet — add scenes via the Branches page.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {[...branch.scenes]
+                    .sort((a, b) => (a.timelinePosition ?? a.order) - (b.timelinePosition ?? b.order))
+                    .map((scene, idx) => (
+                      <BranchSceneCard
+                        key={scene.id}
+                        scene={scene}
+                        index={idx}
+                        branchColor={branch.color ?? '#8B5CF6'}
+                      />
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================
+// Branch scene card (read-only in tree view)
+// ============================================================
+function BranchSceneCard({
+  scene,
+  index,
+  branchColor,
+}: {
+  scene: Scene;
+  index: number;
+  branchColor: string;
+}) {
+  return (
+    <div className="relative flex gap-3 pl-2">
       <div
-        className="absolute left-6 top-4 h-4 w-4 rounded-full border-4 border-background z-10 flex-shrink-0"
-        style={{ backgroundColor: scene.color || '#3B82F6' }}
+        className="absolute left-[-1px] top-4 h-3 w-3 rounded-full border-2 border-background z-10 flex-shrink-0"
+        style={{ backgroundColor: branchColor }}
       />
-
-      {/* Card */}
-      <Card
-        className={`flex-1 ml-8 transition-all ${
-          isDragging ? 'border-primary shadow-lg' : 'hover:border-primary/50'
-        }`}
-      >
-        <CardContent className="p-4">
-          <div className="flex items-start gap-3">
-            {/* Drag handle */}
-            <button
-              {...attributes}
-              {...listeners}
-              className="mt-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground flex-shrink-0 touch-none"
-              aria-label="Drag to reorder"
-            >
-              <GripVertical className="h-5 w-5" />
-            </button>
-
-            {/* Content */}
+      <Card className="flex-1 ml-5 hover:border-primary/30 transition-all">
+        <CardContent className="p-3">
+          <div className="flex items-start gap-2">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-semibold truncate">{scene.title}</h3>
+              <div className="flex items-center gap-2 mb-0.5">
+                <h4 className="text-sm font-semibold truncate">{scene.title}</h4>
                 <Badge
                   variant={
                     scene.status === 'complete'
@@ -90,23 +239,16 @@ function TimelineItem({ scene, index, povCharacterName }: TimelineItemProps) {
                       ? 'warning'
                       : 'secondary'
                   }
+                  className="text-[10px]"
                 >
                   {scene.status}
                 </Badge>
               </div>
-              <p className="text-sm text-muted-foreground line-clamp-2 mb-2">
+              <p className="text-xs text-muted-foreground line-clamp-1">
                 {scene.description || 'No description'}
               </p>
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                {povCharacterName && <span>POV: {povCharacterName}</span>}
-                {scene.location && <span>📍 {scene.location}</span>}
-                {scene.timestamp && <span>🕐 {scene.timestamp}</span>}
-                <span>{scene.wordCount.toLocaleString()} words</span>
-              </div>
             </div>
-
-            {/* Position badge */}
-            <div className="flex-shrink-0 text-sm font-mono text-muted-foreground bg-muted rounded px-1.5 py-0.5">
+            <div className="flex-shrink-0 text-xs font-mono text-muted-foreground bg-muted rounded px-1 py-0.5">
               #{index + 1}
             </div>
           </div>
@@ -147,6 +289,7 @@ export default function TimelinePage() {
   const projectId = params?.projectId as string;
 
   const scenes = useScenes();
+  const branches = useBranches();
   const { getCharacterById, reorderTimeline } = useProjectStore();
 
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -156,7 +299,7 @@ export default function TimelinePage() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  // Sorted list of scenes by timelinePosition, falling back to order
+  // Sorted main trunk
   const sortedScenes = useMemo(() => {
     return [...scenes].sort((a, b) => {
       const posA = a.timelinePosition ?? a.order;
@@ -164,6 +307,16 @@ export default function TimelinePage() {
       return posA - posB;
     });
   }, [scenes]);
+
+  // Branches keyed by fork scene id
+  const branchesBySceneId = useMemo(() => {
+    const map = new Map<string, StoryBranch[]>();
+    for (const b of branches) {
+      const list = map.get(b.branchPointSceneId) ?? [];
+      map.set(b.branchPointSceneId, [...list, b]);
+    }
+    return map;
+  }, [branches]);
 
   const sortedIds = useMemo(() => sortedScenes.map((s) => s.id), [sortedScenes]);
   const activeScene = activeId ? sortedScenes.find((s) => s.id === activeId) ?? null : null;
@@ -185,22 +338,47 @@ export default function TimelinePage() {
     reorderTimeline(newOrder);
   }
 
+  const totalBranchScenes = branches.reduce((sum, b) => sum + b.scenes.length, 0);
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold">Timeline</h1>
-          <p className="text-muted-foreground">
-            Drag scenes to rearrange the chronological order of your story
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-2xl font-bold">Timeline</h1>
+            {branches.length > 0 && (
+              <Badge variant="outline" className="gap-1 text-violet-500 border-violet-500/40">
+                <GitBranch className="w-3 h-3" />
+                {branches.length} branch{branches.length !== 1 ? 'es' : ''}
+              </Badge>
+            )}
+          </div>
+          <p className="text-muted-foreground text-sm">
+            Drag trunk scenes to rearrange chronological order. Branches fork off at their anchor scene.
+            {totalBranchScenes > 0 && (
+              <span className="ml-1">({totalBranchScenes} branch scene{totalBranchScenes !== 1 ? 's' : ''})</span>
+            )}
           </p>
         </div>
-        <Button
-          className="gap-2"
-          onClick={() => router.push(`/projects/${projectId}/scenes`)}
-        >
-          <Plus className="h-4 w-4" />
-          Add Scene
-        </Button>
+        <div className="flex gap-2">
+          {branches.length === 0 && (
+            <Button
+              variant="outline"
+              className="gap-2"
+              onClick={() => router.push(`/projects/${projectId}/branches`)}
+            >
+              <GitBranch className="h-4 w-4" />
+              Add Branch
+            </Button>
+          )}
+          <Button
+            className="gap-2"
+            onClick={() => router.push(`/projects/${projectId}/scenes`)}
+          >
+            <Plus className="h-4 w-4" />
+            Add Scene
+          </Button>
+        </div>
       </div>
 
       {sortedScenes.length === 0 ? (
@@ -213,7 +391,7 @@ export default function TimelinePage() {
           onDragEnd={handleDragEnd}
         >
           <div className="relative">
-            {/* Vertical timeline line */}
+            {/* Vertical main trunk line */}
             <div className="absolute left-8 top-0 bottom-0 w-0.5 bg-border" />
 
             <SortableContext items={sortedIds} strategy={verticalListSortingStrategy}>
@@ -222,12 +400,14 @@ export default function TimelinePage() {
                   const povChar = scene.povCharacterId
                     ? getCharacterById(scene.povCharacterId)
                     : null;
+                  const branchesAtNode = branchesBySceneId.get(scene.id) ?? [];
                   return (
-                    <TimelineItem
+                    <TrunkItem
                       key={scene.id}
                       scene={scene}
                       index={index}
                       povCharacterName={povChar?.name}
+                      branchesAtNode={branchesAtNode}
                     />
                   );
                 })}
@@ -235,7 +415,6 @@ export default function TimelinePage() {
             </SortableContext>
           </div>
 
-          {/* Floating ghost card while dragging */}
           <DragOverlay>
             {activeScene ? <GhostCard scene={activeScene} /> : null}
           </DragOverlay>
@@ -260,3 +439,4 @@ function EmptyState({ onAddScene }: { onAddScene: () => void }) {
     </div>
   );
 }
+

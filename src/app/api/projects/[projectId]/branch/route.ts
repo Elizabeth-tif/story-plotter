@@ -2,23 +2,44 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { storage } from '@/lib/storage';
 import { v4 as uuidv4 } from 'uuid';
-import type { Project, Scene, TimelineEvent } from '@/types';
+import type { StoryBranch } from '@/types';
 
 interface RouteParams {
   params: Promise<{ projectId: string }>;
 }
 
 /**
+ * GET /api/projects/[projectId]/branch
+ * Returns all branches embedded in the project.
+ */
+export async function GET(_request: NextRequest, { params }: RouteParams) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { projectId } = await params;
+    const project = await storage.getProject(session.user.id, projectId);
+    if (!project) {
+      return NextResponse.json({ success: false, error: 'Project not found' }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true, branches: project.branches ?? [] });
+  } catch (error) {
+    console.error('[API Branch GET] Error:', error);
+    return NextResponse.json({ success: false, error: 'Failed to fetch branches' }, { status: 500 });
+  }
+}
+
+/**
  * POST /api/projects/[projectId]/branch
  *
- * Forks the story at a specific scene (branchPointSceneId).
- * The branch receives:
- *   - All scenes UP TO AND INCLUDING the fork scene (shared history)
- *   - All characters, plotlines, locations, notes (shared world-building)
- *   - Timeline events only for the shared scenes
+ * Creates a new StoryBranch INSIDE the project (tree node).
+ * The branch forks at `branchPointSceneId` (a scene on the main trunk).
+ * The branch starts empty – the user adds scenes to it afterwards.
  *
- * The user then opens the branch and adds NEW scenes after the fork point
- * to continue the divergent story.
+ * Body: { branchName: string, branchPointSceneId?: string, color?: string }
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -30,112 +51,159 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const { projectId } = await params;
     const userId = session.user.id;
     const body = await request.json();
-    const { branchName, title, branchPointSceneId } = body as {
+    const { branchName, branchPointSceneId, color } = body as {
       branchName?: string;
-      title?: string;
-      branchPointSceneId?: string; // scene ID in the parent where story forks
+      branchPointSceneId?: string;
+      color?: string;
     };
 
-    // Load origin project
-    const origin = await storage.getProject(userId, projectId);
-    if (!origin) {
+    const project = await storage.getProject(userId, projectId);
+    if (!project) {
       return NextResponse.json({ success: false, error: 'Project not found' }, { status: 404 });
     }
-    if (origin.userId !== userId) {
+    if (project.userId !== userId) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    const sortedScenes = [...(project.scenes ?? [])].sort(
+      (a, b) => (a.timelinePosition ?? a.order) - (b.timelinePosition ?? b.order)
+    );
+
+    // Default fork point: last main scene
+    let resolvedBranchPointSceneId = branchPointSceneId;
+    if (!resolvedBranchPointSceneId) {
+      resolvedBranchPointSceneId = sortedScenes[sortedScenes.length - 1]?.id;
+    }
+
+    if (!resolvedBranchPointSceneId) {
+      return NextResponse.json(
+        { success: false, error: 'Project has no scenes to branch from' },
+        { status: 400 }
+      );
+    }
+
+    const forkSceneExists = sortedScenes.some((s) => s.id === resolvedBranchPointSceneId);
+    if (!forkSceneExists) {
+      return NextResponse.json(
+        { success: false, error: 'Branch point scene not found on main trunk' },
+        { status: 400 }
+      );
+    }
+
+    const now = new Date().toISOString();
+    const newBranch: StoryBranch = {
+      id: uuidv4(),
+      name: branchName?.trim() || 'New Branch',
+      color: color ?? '#8B5CF6',
+      branchPointSceneId: resolvedBranchPointSceneId,
+      scenes: [],
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    const updatedProject = {
+      ...project,
+      branches: [...(project.branches ?? []), newBranch],
+      updatedAt: now,
+      updatedBy: userId,
+    };
+
+    await storage.setProject(userId, projectId, updatedProject);
+
+    console.log('[API Branch POST] Created branch:', newBranch.id, 'in project:', projectId);
+
+    return NextResponse.json({ success: true, branch: newBranch });
+  } catch (error) {
+    console.error('[API Branch POST] Error:', error);
+    return NextResponse.json({ success: false, error: 'Failed to create branch' }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/projects/[projectId]/branch
+ * Body: { branchId: string }
+ */
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { projectId } = await params;
+    const userId = session.user.id;
+    const { branchId } = (await request.json()) as { branchId: string };
+
+    const project = await storage.getProject(userId, projectId);
+    if (!project) {
+      return NextResponse.json({ success: false, error: 'Project not found' }, { status: 404 });
+    }
+    if (project.userId !== userId) {
+      return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    }
+
+    const updatedProject = {
+      ...project,
+      branches: (project.branches ?? [] as import('@/types').StoryBranch[]).filter((b: import('@/types').StoryBranch) => b.id !== branchId),
+      updatedAt: new Date().toISOString(),
+      updatedBy: userId,
+    };
+
+    await storage.setProject(userId, projectId, updatedProject);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('[API Branch DELETE] Error:', error);
+    return NextResponse.json({ success: false, error: 'Failed to delete branch' }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH /api/projects/[projectId]/branch
+ * Update branch metadata or its scenes array.
+ * Body: { branchId: string, ...partial StoryBranch fields }
+ */
+export async function PATCH(request: NextRequest, { params }: RouteParams) {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { projectId } = await params;
+    const userId = session.user.id;
+    const body = (await request.json()) as { branchId: string } & Partial<StoryBranch>;
+    const { branchId, ...updates } = body;
+
+    const project = await storage.getProject(userId, projectId);
+    if (!project) {
+      return NextResponse.json({ success: false, error: 'Project not found' }, { status: 404 });
+    }
+    if (project.userId !== userId) {
       return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
     }
 
     const now = new Date().toISOString();
-    const newId = uuidv4();
-    const resolvedBranchName = branchName?.trim() || 'Branch';
-    const resolvedTitle = title?.trim() || `${origin.title} — ${resolvedBranchName}`;
-
-    // Sort scenes by timelinePosition or order to get chronological order
-    const sortedScenes: Scene[] = [...(origin.scenes || [])].sort((a, b) => {
-      const posA = a.timelinePosition ?? a.order;
-      const posB = b.timelinePosition ?? b.order;
-      return posA - posB;
-    });
-
-    // Determine which scenes belong to the shared history
-    let sharedScenes: Scene[];
-    let resolvedBranchPointSceneId: string | undefined = branchPointSceneId;
-
-    if (branchPointSceneId) {
-      const forkIndex = sortedScenes.findIndex((s) => s.id === branchPointSceneId);
-      if (forkIndex === -1) {
-        // Scene not found - share all scenes
-        sharedScenes = sortedScenes;
-        resolvedBranchPointSceneId = sortedScenes[sortedScenes.length - 1]?.id;
-      } else {
-        // Include scenes up to and including the fork scene
-        sharedScenes = sortedScenes.slice(0, forkIndex + 1);
-      }
-    } else {
-      // No fork point specified: share all scenes (branch continues from the end)
-      sharedScenes = sortedScenes;
-      resolvedBranchPointSceneId = sortedScenes[sortedScenes.length - 1]?.id;
-    }
-
-    const sharedSceneIds = new Set(sharedScenes.map((s) => s.id));
-
-    // Filter timeline events to only those for shared scenes
-    const sharedTimelineEvents = (origin.timeline?.events || []).filter((e: TimelineEvent) =>
-      sharedSceneIds.has(e.sceneId)
+    const updatedBranches: StoryBranch[] = (project.branches ?? []).map((b: StoryBranch) =>
+      b.id === branchId ? { ...b, ...updates, id: branchId, updatedAt: now } : b
     );
 
-    // Build the branch project
-    const branchProject: Project = {
-      ...JSON.parse(JSON.stringify(origin)), // deep copy for safety
-      id: newId,
-      userId,
-      title: resolvedTitle,
-      parentId: projectId,
-      branchName: resolvedBranchName,
-      branchPointSceneId: resolvedBranchPointSceneId,
-      createdAt: now,
+    const updatedProject = {
+      ...project,
+      branches: updatedBranches,
       updatedAt: now,
       updatedBy: userId,
-      version: 1,
-      // Override scenes and timeline with only shared content
-      scenes: JSON.parse(JSON.stringify(sharedScenes)),
-      timeline: {
-        ...origin.timeline,
-        events: JSON.parse(JSON.stringify(sharedTimelineEvents)),
-      },
-      // Characters, plotlines, locations, notes are all shared (deep-copied)
     };
 
-    await storage.setProject(userId, newId, branchProject);
-
-    console.log(
-      '[API Branch] Created branch:', newId,
-      'from:', projectId,
-      'fork at scene:', resolvedBranchPointSceneId,
-      'shared scenes:', sharedScenes.length
-    );
+    await storage.setProject(userId, projectId, updatedProject);
 
     return NextResponse.json({
       success: true,
-      project: {
-        id: newId,
-        title: branchProject.title,
-        branchName: resolvedBranchName,
-        branchPointSceneId: resolvedBranchPointSceneId,
-        parentId: projectId,
-        createdAt: now,
-        updatedAt: now,
-        updatedBy: userId,
-        archived: false,
-        wordCount: sharedScenes.reduce((sum, s) => sum + (s.wordCount || 0), 0),
-        settings: origin.settings || {},
-        genre: origin.genre || '',
-        description: origin.description || '',
-      },
+      branch: updatedBranches.find((b: StoryBranch) => b.id === branchId),
     });
   } catch (error) {
-    console.error('[API Branch] Error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to create branch' }, { status: 500 });
+    console.error('[API Branch PATCH] Error:', error);
+    return NextResponse.json({ success: false, error: 'Failed to update branch' }, { status: 500 });
   }
 }
 

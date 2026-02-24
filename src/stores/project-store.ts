@@ -8,7 +8,8 @@ import type {
   Location, 
   Note,
   Timeline,
-  TimelineEvent
+  TimelineEvent,
+  StoryBranch,
 } from '@/types';
 
 interface ProjectState {
@@ -68,6 +69,15 @@ interface ProjectState {
   updateNote: (id: string, updates: Partial<Note>) => void;
   deleteNote: (id: string) => void;
   
+  // Actions - Branches
+  addBranch: (branch: StoryBranch) => void;
+  updateBranch: (id: string, updates: Partial<Omit<StoryBranch, 'scenes'>>) => void;
+  deleteBranch: (id: string) => void;
+  addSceneToBranch: (branchId: string, scene: Scene) => void;
+  updateBranchScene: (branchId: string, sceneId: string, updates: Partial<Scene>) => void;
+  deleteBranchScene: (branchId: string, sceneId: string) => void;
+  reorderBranchScenes: (branchId: string, orderedIds: string[]) => void;
+
   // Actions - Timeline
   updateTimeline: (timeline: Timeline) => void;
   addTimelineEvent: (event: TimelineEvent) => void;
@@ -386,6 +396,118 @@ export const useProjectStore = create<ProjectState>()(
       };
     }),
     
+    // Branch actions
+    addBranch: (branch) => set((state) => {
+      if (!state.project) return state;
+      return {
+        project: {
+          ...state.project,
+          branches: [...(state.project.branches ?? []), branch],
+        },
+        isDirty: true,
+      };
+    }),
+
+    updateBranch: (id, updates) => set((state) => {
+      if (!state.project) return state;
+      return {
+        project: {
+          ...state.project,
+          branches: (state.project.branches ?? []).map((b) =>
+            b.id === id ? { ...b, ...updates, updatedAt: new Date().toISOString() } : b
+          ),
+        },
+        isDirty: true,
+      };
+    }),
+
+    deleteBranch: (id) => set((state) => {
+      if (!state.project) return state;
+      return {
+        project: {
+          ...state.project,
+          branches: (state.project.branches ?? []).filter((b) => b.id !== id),
+        },
+        isDirty: true,
+      };
+    }),
+
+    addSceneToBranch: (branchId, scene) => set((state) => {
+      if (!state.project) return state;
+      return {
+        project: {
+          ...state.project,
+          branches: (state.project.branches ?? []).map((b) =>
+            b.id === branchId
+              ? { ...b, scenes: [...b.scenes, scene], updatedAt: new Date().toISOString() }
+              : b
+          ),
+        },
+        isDirty: true,
+      };
+    }),
+
+    updateBranchScene: (branchId, sceneId, updates) => set((state) => {
+      if (!state.project) return state;
+      return {
+        project: {
+          ...state.project,
+          branches: (state.project.branches ?? []).map((b) =>
+            b.id === branchId
+              ? {
+                  ...b,
+                  scenes: b.scenes.map((s) =>
+                    s.id === sceneId ? { ...s, ...updates, updatedAt: new Date().toISOString() } : s
+                  ),
+                  updatedAt: new Date().toISOString(),
+                }
+              : b
+          ),
+        },
+        isDirty: true,
+      };
+    }),
+
+    deleteBranchScene: (branchId, sceneId) => set((state) => {
+      if (!state.project) return state;
+      return {
+        project: {
+          ...state.project,
+          branches: (state.project.branches ?? []).map((b) =>
+            b.id === branchId
+              ? {
+                  ...b,
+                  scenes: b.scenes.filter((s) => s.id !== sceneId),
+                  updatedAt: new Date().toISOString(),
+                }
+              : b
+          ),
+        },
+        isDirty: true,
+      };
+    }),
+
+    reorderBranchScenes: (branchId, orderedIds) => set((state) => {
+      if (!state.project) return state;
+      return {
+        project: {
+          ...state.project,
+          branches: (state.project.branches ?? []).map((b) => {
+            if (b.id !== branchId) return b;
+            const sceneMap = new Map(b.scenes.map((s) => [s.id, s]));
+            const reordered = orderedIds
+              .map((id, index) => {
+                const scene = sceneMap.get(id);
+                return scene ? { ...scene, order: index } : null;
+              })
+              .filter((s): s is Scene => s !== null);
+            return { ...b, scenes: reordered, updatedAt: new Date().toISOString() };
+          }),
+        },
+        isDirty: true,
+      };
+    }),
+
     // Timeline actions
     updateTimeline: (timeline) => set((state) => {
       if (!state.project) return state;
@@ -484,6 +606,7 @@ export const usePlotlines = () => useProjectStore((state) => state.project?.plot
 export const useLocations = () => useProjectStore((state) => state.project?.locations ?? []);
 export const useNotes = () => useProjectStore((state) => state.project?.notes ?? []);
 export const useTimeline = () => useProjectStore((state) => state.project?.timeline);
+export const useBranches = () => useProjectStore((state) => state.project?.branches ?? []);
 export const useProjectMeta = () => useProjectStore((state) => 
   state.project ? {
     id: state.project.id,
