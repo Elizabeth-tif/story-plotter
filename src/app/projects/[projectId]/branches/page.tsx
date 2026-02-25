@@ -23,8 +23,12 @@ import type { Scene, StoryBranch } from '@/types';
 // Create-branch modal
 // ──────────────────────────────────────────────────────────────────────────────
 interface CreateBranchModalProps {
+  /** The scene we are forking off */
   scene: Scene;
   projectId: string;
+  /** When set, the new branch is a sub-branch of this parent */
+  parentBranchId?: string;
+  parentBranchName?: string;
   onClose: () => void;
   onCreated: (branch: StoryBranch) => void;
 }
@@ -34,8 +38,15 @@ const BRANCH_COLORS = [
   '#EF4444', '#EC4899', '#06B6D4', '#84CC16',
 ];
 
-function CreateBranchModal({ scene, projectId, onClose, onCreated }: CreateBranchModalProps) {
-  const { addBranch } = useProjectStore();
+function CreateBranchModal({
+  scene,
+  projectId,
+  parentBranchId,
+  parentBranchName,
+  onClose,
+  onCreated,
+}: CreateBranchModalProps) {
+  const { addBranch, setLastKnownTimestamp } = useProjectStore();
   const [branchName, setBranchName] = useState('');
   const [color, setColor] = useState(BRANCH_COLORS[0]);
 
@@ -48,14 +59,17 @@ function CreateBranchModal({ scene, projectId, onClose, onCreated }: CreateBranc
           branchName: branchName.trim() || 'New Branch',
           branchPointSceneId: scene.id,
           color,
+          ...(parentBranchId ? { parentBranchId } : {}),
         }),
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Failed to create branch');
-      return data.branch as StoryBranch;
+      return { branch: data.branch as StoryBranch, updatedAt: data.updatedAt as string };
     },
-    onSuccess: (branch) => {
+    onSuccess: ({ branch, updatedAt }) => {
       addBranch(branch);
+      // Sync timestamp so auto-save doesn't see a conflict
+      if (updatedAt) setLastKnownTimestamp(updatedAt);
       onCreated(branch);
       onClose();
     },
@@ -66,8 +80,11 @@ function CreateBranchModal({ scene, projectId, onClose, onCreated }: CreateBranc
       <div className="space-y-4">
         <p className="text-sm text-muted-foreground">
           Branch the story after{' '}
-          <span className="text-foreground font-medium">&ldquo;{scene.title}&rdquo;</span>. You can then
-          add divergent scenes to this branch.
+          <span className="text-foreground font-medium">&ldquo;{scene.title}&rdquo;</span>
+          {parentBranchName && (
+            <> inside branch <span className="text-foreground font-medium">&ldquo;{parentBranchName}&rdquo;</span></>
+          )}
+          . You can then add divergent scenes to this branch.
         </p>
 
         <div className="space-y-1.5">
@@ -129,19 +146,49 @@ function CreateBranchModal({ scene, projectId, onClose, onCreated }: CreateBranc
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Branch detail panel
+// Branch detail panel (recursive – renders its own children)
 // ──────────────────────────────────────────────────────────────────────────────
+interface ForkTarget {
+  scene: Scene;
+  parentBranchId: string;
+  parentBranchName: string;
+}
+
 interface BranchPanelProps {
   branch: StoryBranch;
   forkSceneTitle: string;
   projectId: string;
+  /** All branches in the project so we can find children */
+  allBranches: StoryBranch[];
+  depth: number;
   onDeleted: () => void;
+  onFork: (target: ForkTarget) => void;
 }
 
-function BranchPanel({ branch, forkSceneTitle, projectId, onDeleted }: BranchPanelProps) {
-  const { deleteBranch } = useProjectStore();
+function BranchPanel({
+  branch,
+  forkSceneTitle,
+  projectId,
+  allBranches,
+  depth,
+  onDeleted,
+  onFork,
+}: BranchPanelProps) {
+  const { deleteBranch, setLastKnownTimestamp } = useProjectStore();
   const [isExpanded, setIsExpanded] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
+
+  // Map: sceneId → child branches rooted at this branch
+  const childrenBySceneId = useMemo(() => {
+    const map = new Map<string, StoryBranch[]>();
+    for (const b of allBranches) {
+      if (b.parentBranchId === branch.id) {
+        const list = map.get(b.branchPointSceneId) ?? [];
+        map.set(b.branchPointSceneId, [...list, b]);
+      }
+    }
+    return map;
+  }, [allBranches, branch.id]);
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -152,17 +199,22 @@ function BranchPanel({ branch, forkSceneTitle, projectId, onDeleted }: BranchPan
       });
       const data = await res.json();
       if (!data.success) throw new Error(data.error || 'Failed');
+      return data.updatedAt as string | undefined;
     },
-    onSuccess: () => {
-      deleteBranch(branch.id);
+    onSuccess: (updatedAt) => {
+      deleteBranch(branch.id); // store cascade-deletes all descendants
+      // Sync timestamp so auto-save doesn't see a conflict
+      if (updatedAt) setLastKnownTimestamp(updatedAt);
       onDeleted();
     },
   });
 
+  const branchColor = branch.color ?? '#8B5CF6';
+
   return (
     <div
       className="border rounded-lg overflow-hidden"
-      style={{ borderLeftColor: branch.color ?? '#8B5CF6', borderLeftWidth: 3 }}
+      style={{ borderLeftColor: branchColor, borderLeftWidth: 3 }}
     >
       {/* Branch header */}
       <div className="flex items-center gap-2 px-4 py-3 bg-card">
@@ -177,7 +229,10 @@ function BranchPanel({ branch, forkSceneTitle, projectId, onDeleted }: BranchPan
           )}
         </button>
 
-        <Circle className="w-3 h-3 flex-shrink-0" style={{ color: branch.color ?? '#8B5CF6', fill: branch.color ?? '#8B5CF6' }} />
+        <Circle
+          className="w-3 h-3 flex-shrink-0"
+          style={{ color: branchColor, fill: branchColor }}
+        />
 
         <div className="flex-1 min-w-0">
           <span className="font-medium text-sm truncate">{branch.name}</span>
@@ -189,6 +244,24 @@ function BranchPanel({ branch, forkSceneTitle, projectId, onDeleted }: BranchPan
         <Badge variant="secondary" className="text-xs">
           {branch.scenes.length} scene{branch.scenes.length !== 1 ? 's' : ''}
         </Badge>
+
+        {/* Quick sub-branch from last scene */}
+        {branch.scenes.length > 0 && (
+          <button
+            onClick={() =>
+              onFork({
+                scene: branch.scenes[branch.scenes.length - 1],
+                parentBranchId: branch.id,
+                parentBranchName: branch.name,
+              })
+            }
+            className="flex-shrink-0 flex items-center gap-1 text-xs text-muted-foreground
+                       hover:text-violet-400 transition-colors"
+            title="Sub-branch from last scene"
+          >
+            <GitFork className="w-3.5 h-3.5" />
+          </button>
+        )}
 
         {confirmDelete ? (
           <div className="flex items-center gap-1">
@@ -222,43 +295,88 @@ function BranchPanel({ branch, forkSceneTitle, projectId, onDeleted }: BranchPan
         )}
       </div>
 
-      {/* Branch scenes */}
+      {/* Branch scenes + nested sub-branches */}
       {isExpanded && (
         <div className="px-4 py-3 bg-card/50 border-t border-border">
           {branch.scenes.length === 0 ? (
             <p className="text-xs text-muted-foreground py-2">
               No scenes yet. Go to{' '}
-              <span className="text-foreground">Timeline</span> to see this branch and add scenes to it.
+              <span className="text-foreground">Timeline</span> to add scenes to this branch.
             </p>
           ) : (
-            <ol className="space-y-1.5">
-              {branch.scenes.map((scene, idx) => (
-                <li key={scene.id} className="flex items-start gap-2 text-sm">
-                  <span className="text-xs text-muted-foreground font-mono mt-0.5 w-5 text-right flex-shrink-0">
-                    {idx + 1}.
-                  </span>
-                  <div className="min-w-0">
-                    <p className="font-medium truncate">{scene.title || 'Untitled scene'}</p>
-                    {scene.description && (
-                      <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                        {scene.description}
-                      </p>
+            <ol className="space-y-0">
+              {branch.scenes.map((scene, idx) => {
+                const sceneSubs = childrenBySceneId.get(scene.id) ?? [];
+                return (
+                  <li key={scene.id} className="relative">
+                    {/* Scene row */}
+                    <div className="flex items-start gap-2 text-sm py-1.5 group">
+                      <span className="text-xs text-muted-foreground font-mono mt-0.5 w-5 text-right flex-shrink-0">
+                        {idx + 1}.
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium truncate">{scene.title || 'Untitled scene'}</p>
+                        {scene.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                            {scene.description}
+                          </p>
+                        )}
+                      </div>
+                      <Badge
+                        className="ml-auto text-[10px] flex-shrink-0"
+                        variant={
+                          scene.status === 'complete'
+                            ? 'success'
+                            : scene.status === 'in-progress'
+                            ? 'warning'
+                            : 'secondary'
+                        }
+                      >
+                        {scene.status}
+                      </Badge>
+                      {/* "Branch here" inside this branch */}
+                      <button
+                        onClick={() =>
+                          onFork({
+                            scene,
+                            parentBranchId: branch.id,
+                            parentBranchName: branch.name,
+                          })
+                        }
+                        className="flex-shrink-0 flex items-center gap-1 text-xs text-muted-foreground
+                                   hover:text-violet-500 transition-colors opacity-0 group-hover:opacity-100"
+                        title="Branch here"
+                      >
+                        <GitFork className="w-3 h-3" />
+                        Branch here
+                      </button>
+                    </div>
+
+                    {/* Sub-branches forking from this scene */}
+                    {sceneSubs.length > 0 && (
+                      <div className="pl-6 pb-2 space-y-2">
+                        {sceneSubs.map((sub) => (
+                          <div key={sub.id} className="relative">
+                            <div
+                              className="absolute left-[-14px] top-[16px] w-3.5 h-0.5 rounded-full"
+                              style={{ backgroundColor: sub.color ?? '#8B5CF6' }}
+                            />
+                            <BranchPanel
+                              branch={sub}
+                              forkSceneTitle={scene.title ?? `Scene ${idx + 1}`}
+                              projectId={projectId}
+                              allBranches={allBranches}
+                              depth={depth + 1}
+                              onDeleted={onDeleted}
+                              onFork={onFork}
+                            />
+                          </div>
+                        ))}
+                      </div>
                     )}
-                  </div>
-                  <Badge
-                    className="ml-auto text-[10px] flex-shrink-0"
-                    variant={
-                      scene.status === 'complete'
-                        ? 'success'
-                        : scene.status === 'in-progress'
-                        ? 'warning'
-                        : 'secondary'
-                    }
-                  >
-                    {scene.status}
-                  </Badge>
-                </li>
-              ))}
+                  </li>
+                );
+              })}
             </ol>
           )}
         </div>
@@ -285,17 +403,24 @@ export default function BranchesPage() {
     [scenes]
   );
 
-  // Map: branchPointSceneId -> branches
-  const branchesBySceneId = useMemo(() => {
+  // Top-level branches (no parent) grouped by their main-trunk fork scene
+  const topBranchesBySceneId = useMemo(() => {
     const map = new Map<string, StoryBranch[]>();
     for (const b of branches) {
+      if (b.parentBranchId) continue; // nested – rendered inside BranchPanel
       const existing = map.get(b.branchPointSceneId) ?? [];
       map.set(b.branchPointSceneId, [...existing, b]);
     }
     return map;
   }, [branches]);
 
-  const [forkingScene, setForkingScene] = useState<Scene | null>(null);
+  // Forking state (covers both main-trunk forks and sub-branch forks)
+  const [forkTarget, setForkTarget] = useState<{
+    scene: Scene;
+    parentBranchId?: string;
+    parentBranchName?: string;
+  } | null>(null);
+
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
 
   return (
@@ -308,10 +433,11 @@ export default function BranchesPage() {
             <h1 className="text-xl font-semibold">Story Branches</h1>
           </div>
           <p className="text-sm text-muted-foreground">
-            Branches live inside this project and diverge at a chosen scene.
+            Branches live inside this project and diverge at a chosen scene. Branches can have
+            their own sub-branches.
             {branches.length > 0 && (
               <span className="ml-2 text-violet-500">
-                {branches.length} branch{branches.length !== 1 ? 'es' : ''}.
+                {branches.length} branch{branches.length !== 1 ? 'es' : ''} total.
               </span>
             )}
           </p>
@@ -320,7 +446,7 @@ export default function BranchesPage() {
         {sortedScenes.length > 0 && (
           <Button
             className="gap-2"
-            onClick={() => setForkingScene(sortedScenes[sortedScenes.length - 1])}
+            onClick={() => setForkTarget({ scene: sortedScenes[sortedScenes.length - 1] })}
           >
             <Plus className="w-4 h-4" />
             New Branch
@@ -341,9 +467,8 @@ export default function BranchesPage() {
 
           <ol className="space-y-0">
             {sortedScenes.map((scene, idx) => {
-              const sceneBranches = branchesBySceneId.get(scene.id) ?? [];
+              const sceneBranches = topBranchesBySceneId.get(scene.id) ?? [];
               const hasBranches = sceneBranches.length > 0;
-              const isLast = idx === sortedScenes.length - 1;
 
               return (
                 <li key={scene.id} className="relative">
@@ -378,7 +503,7 @@ export default function BranchesPage() {
 
                     {/* "Branch here" hover action */}
                     <button
-                      onClick={() => setForkingScene(scene)}
+                      onClick={() => setForkTarget({ scene })}
                       className="flex-shrink-0 flex items-center gap-1 text-xs text-muted-foreground
                                  hover:text-violet-500 transition-colors opacity-0 group-hover:opacity-100 mt-1"
                     >
@@ -387,7 +512,7 @@ export default function BranchesPage() {
                     </button>
                   </div>
 
-                  {/* Inline branches — indented under this scene node */}
+                  {/* Inline top-level branches — indented under this scene node */}
                   {hasBranches && (
                     <div className="pl-7 pb-2 space-y-2">
                       {sceneBranches.map((branch) => (
@@ -401,9 +526,12 @@ export default function BranchesPage() {
                             branch={branch}
                             forkSceneTitle={scene.title ?? `Scene ${idx + 1}`}
                             projectId={projectId}
+                            allBranches={branches}
+                            depth={0}
                             onDeleted={() => {
                               if (activeBranchId === branch.id) setActiveBranchId(null);
                             }}
+                            onFork={(target) => setForkTarget(target)}
                           />
                         </div>
                       ))}
@@ -425,16 +553,17 @@ export default function BranchesPage() {
         </div>
       )}
 
-      {/* Create branch modal */}
-      {forkingScene && (
+      {/* Create branch modal (handles both top-level and sub-branch creation) */}
+      {forkTarget && (
         <CreateBranchModal
-          scene={forkingScene}
+          scene={forkTarget.scene}
           projectId={projectId}
-          onClose={() => setForkingScene(null)}
+          parentBranchId={forkTarget.parentBranchId}
+          parentBranchName={forkTarget.parentBranchName}
+          onClose={() => setForkTarget(null)}
           onCreated={(b) => setActiveBranchId(b.id)}
         />
       )}
     </div>
   );
 }
-

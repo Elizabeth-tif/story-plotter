@@ -73,9 +73,10 @@ export default function ProjectLayout({ children }: ProjectLayoutProps) {
     }
   }, [data, setProject]);
 
-  // Enable auto-save for this project
+  // Enable auto-save: debounce 2 s after last mutation, flush at most every 30 s
   useAutoSave({
-    interval: 5000, // Save every 5 seconds (changed from 30s to prevent data loss)
+    debounceMs: 2000,
+    maxIntervalMs: 30000,
     enabled: !!project,
   });
 

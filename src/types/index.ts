@@ -205,8 +205,13 @@ export interface StoryBranch {
   id: string;
   name: string;
   color?: string;
-  /** Scene ID in the main trunk (project.scenes) where this branch forks off */
+  /** Scene ID where this branch forks off (in main trunk or in parentBranch.scenes) */
   branchPointSceneId: string;
+  /**
+   * If set, this branch diverges from a scene inside another branch rather than
+   * from the main trunk. Enables unlimited nesting depth.
+   */
+  parentBranchId?: string;
   /** Scenes that are unique to this branch (written after the fork point) */
   scenes: Scene[];
   createdAt: string;

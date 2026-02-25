@@ -423,10 +423,19 @@ export const useProjectStore = create<ProjectState>()(
 
     deleteBranch: (id) => set((state) => {
       if (!state.project) return state;
+      // Cascade-delete all descendants
+      const toDelete = new Set<string>();
+      const collect = (branchId: string) => {
+        toDelete.add(branchId);
+        for (const b of state.project!.branches ?? []) {
+          if (b.parentBranchId === branchId) collect(b.id);
+        }
+      };
+      collect(id);
       return {
         project: {
           ...state.project,
-          branches: (state.project.branches ?? []).filter((b) => b.id !== id),
+          branches: (state.project.branches ?? []).filter((b) => !toDelete.has(b.id)),
         },
         isDirty: true,
       };
