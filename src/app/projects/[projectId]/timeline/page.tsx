@@ -28,7 +28,6 @@ import {
   Plus,
   GripVertical,
   GitBranch,
-  Circle,
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
@@ -137,71 +136,71 @@ function TrunkItem({ scene, index, povCharacterName, branchesAtNode }: TrunkItem
 }
 
 // ============================================================
-// Branch sub-tree (indented, collapsible)
+// Branch sub-tree (indented, collapsible, tree-connected)
 // ============================================================
 function BranchSubTree({ branch }: { branch: StoryBranch }) {
   const [expanded, setExpanded] = useState(true);
+  const color = branch.color ?? '#8B5CF6';
 
   return (
-    <div className="ml-14 mt-1 mb-2">
-      {/* Branch connector line */}
-      <div className="relative">
-        {/* Horizontal connector */}
-        <div className="absolute left-0 top-4 w-4 h-0.5 bg-border" />
+    // ml-8 = 32px — aligns the left edge with the trunk spine (left-8), so our
+    // connector arm starts exactly where the trunk line is and goes rightward.
+    <div className="relative ml-8 mt-1 mb-2">
+      {/* Horizontal arm: trunk spine → branch header */}
+      <div
+        className="absolute left-0 top-[13px] w-7 h-0.5 rounded-full"
+        style={{ backgroundColor: color }}
+      />
 
-        {/* Branch label row */}
-        <div className="pl-6">
-          <button
-            onClick={() => setExpanded((v) => !v)}
-            className="flex items-center gap-1.5 text-xs font-medium mb-1.5 hover:opacity-80 transition-opacity"
-            style={{ color: branch.color ?? '#8B5CF6' }}
-          >
-            <Circle
-              className="w-2.5 h-2.5 flex-shrink-0"
-              style={{ fill: branch.color ?? '#8B5CF6', color: branch.color ?? '#8B5CF6' }}
-            />
-            <span>{branch.name}</span>
-            <span className="text-muted-foreground font-normal">
-              ({branch.scenes.length} scene{branch.scenes.length !== 1 ? 's' : ''})
-            </span>
-            {expanded ? (
-              <ChevronDown className="w-3 h-3 text-muted-foreground" />
-            ) : (
-              <ChevronRight className="w-3 h-3 text-muted-foreground" />
-            )}
-          </button>
-
-          {expanded && (
-            <div className="relative">
-              {/* Vertical branch line */}
-              {branch.scenes.length > 0 && (
-                <div
-                  className="absolute left-[-3px] top-0 bottom-4 w-0.5"
-                  style={{ backgroundColor: branch.color ?? '#8B5CF6', opacity: 0.4 }}
-                />
-              )}
-
-              {branch.scenes.length === 0 ? (
-                <p className="text-xs text-muted-foreground pl-2 pb-2">
-                  No scenes yet — add scenes via the Branches page.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {[...branch.scenes]
-                    .sort((a, b) => (a.timelinePosition ?? a.order) - (b.timelinePosition ?? b.order))
-                    .map((scene, idx) => (
-                      <BranchSceneCard
-                        key={scene.id}
-                        scene={scene}
-                        index={idx}
-                        branchColor={branch.color ?? '#8B5CF6'}
-                      />
-                    ))}
-                </div>
-              )}
-            </div>
+      {/* Branch content, pushed right so arm lands on the GitBranch icon */}
+      <div className="pl-8">
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="flex items-center gap-1.5 text-xs font-semibold mb-1.5 hover:opacity-80 transition-opacity"
+          style={{ color }}
+        >
+          <GitBranch className="w-3.5 h-3.5 flex-shrink-0" />
+          <span>{branch.name}</span>
+          <span className="text-muted-foreground font-normal ml-1">
+            ({branch.scenes.length} scene{branch.scenes.length !== 1 ? 's' : ''})
+          </span>
+          {expanded ? (
+            <ChevronDown className="w-3 h-3 text-muted-foreground ml-0.5" />
+          ) : (
+            <ChevronRight className="w-3 h-3 text-muted-foreground ml-0.5" />
           )}
-        </div>
+        </button>
+
+        {expanded && (
+          <div className="relative">
+            {/* Vertical colored line running down the branch */}
+            {branch.scenes.length > 0 && (
+              <div
+                className="absolute left-[-5px] top-0 bottom-4 w-0.5 rounded-full"
+                style={{ backgroundColor: color, opacity: 0.45 }}
+              />
+            )}
+
+            {branch.scenes.length === 0 ? (
+              <p className="text-xs text-muted-foreground pl-2 pb-2 italic">
+                No scenes yet — add scenes via the Branches page.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {[...branch.scenes]
+                  .sort((a, b) => (a.timelinePosition ?? a.order) - (b.timelinePosition ?? b.order))
+                  .map((scene, idx) => (
+                    <BranchSceneCard
+                      key={scene.id}
+                      scene={scene}
+                      index={idx}
+                      branchColor={color}
+                    />
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

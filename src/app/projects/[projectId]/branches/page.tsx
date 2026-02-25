@@ -295,11 +295,6 @@ export default function BranchesPage() {
     return map;
   }, [branches]);
 
-  const sceneMap = useMemo(
-    () => new Map(scenes.map((s) => [s.id, s])),
-    [scenes]
-  );
-
   const [forkingScene, setForkingScene] = useState<Scene | null>(null);
   const [activeBranchId, setActiveBranchId] = useState<string | null>(null);
 
@@ -333,97 +328,100 @@ export default function BranchesPage() {
         )}
       </div>
 
-      {/* Scene trunk + fork list */}
+      {/* Tree view: trunk scenes with branches indented inline */}
       {sortedScenes.length === 0 ? (
         <div className="flex flex-col items-center justify-center flex-1 text-muted-foreground">
           <BookOpen className="w-10 h-10 mb-3 opacity-40" />
           <p className="text-sm">Add scenes to the project first, then create branches here.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left: main trunk with fork points */}
-          <div>
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-              Main Trunk
-            </h2>
-            <div className="relative">
-              <div className="absolute left-[9px] top-3 bottom-3 w-0.5 bg-border" />
-              <ol className="space-y-1">
-                {sortedScenes.map((scene, idx) => {
-                  const hasBranches = (branchesBySceneId.get(scene.id)?.length ?? 0) > 0;
-                  return (
-                    <li key={scene.id} className="relative flex items-start gap-3 group">
-                      <div
-                        className={`relative z-10 mt-2 w-4 h-4 rounded-full border-2 flex-shrink-0
-                          ${hasBranches
-                            ? 'border-violet-500 bg-violet-500/20'
-                            : 'border-border bg-background'
-                          }`}
-                      />
-                      <div className="flex-1 min-w-0 py-1.5">
-                        <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium truncate">
-                            {scene.title || `Scene ${idx + 1}`}
-                          </p>
-                          {hasBranches && (
-                            <Badge variant="secondary" className="text-[10px]">
-                              {branchesBySceneId.get(scene.id)!.length} branch
-                              {branchesBySceneId.get(scene.id)!.length !== 1 ? 'es' : ''}
-                            </Badge>
-                          )}
-                        </div>
-                        {scene.description && (
-                          <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
-                            {scene.description}
-                          </p>
+        <div className="relative max-w-2xl">
+          {/* Main trunk vertical spine */}
+          <div className="absolute left-[9px] top-3 bottom-3 w-0.5 bg-border" />
+
+          <ol className="space-y-0">
+            {sortedScenes.map((scene, idx) => {
+              const sceneBranches = branchesBySceneId.get(scene.id) ?? [];
+              const hasBranches = sceneBranches.length > 0;
+              const isLast = idx === sortedScenes.length - 1;
+
+              return (
+                <li key={scene.id} className="relative">
+                  {/* Scene node row */}
+                  <div className="relative flex items-start gap-3 group py-1.5">
+                    {/* Trunk dot */}
+                    <div
+                      className={`relative z-10 mt-1.5 w-4 h-4 rounded-full border-2 flex-shrink-0 transition-colors
+                        ${hasBranches
+                          ? 'border-violet-500 bg-violet-500/20'
+                          : 'border-border bg-background'
+                        }`}
+                    />
+
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium truncate">
+                          {scene.title || `Scene ${idx + 1}`}
+                        </p>
+                        {hasBranches && (
+                          <Badge variant="secondary" className="text-[10px] shrink-0">
+                            {sceneBranches.length} branch{sceneBranches.length !== 1 ? 'es' : ''}
+                          </Badge>
                         )}
                       </div>
-                      <button
-                        onClick={() => setForkingScene(scene)}
-                        className="flex-shrink-0 mt-2 flex items-center gap-1 text-xs text-muted-foreground
-                                   hover:text-violet-500 transition-colors opacity-0 group-hover:opacity-100"
-                      >
-                        <GitFork className="w-3 h-3" />
-                        Branch here
-                      </button>
-                    </li>
-                  );
-                })}
-              </ol>
-            </div>
-          </div>
+                      {scene.description && (
+                        <p className="text-xs text-muted-foreground line-clamp-1 mt-0.5">
+                          {scene.description}
+                        </p>
+                      )}
+                    </div>
 
-          {/* Right: branch list */}
-          <div>
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">
-              Branches ({branches.length})
-            </h2>
-            {branches.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border p-6 text-center">
-                <GitFork className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-40" />
-                <p className="text-sm text-muted-foreground">
-                  No branches yet. Hover over a scene on the left and click &ldquo;Branch here&rdquo;.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {branches.map((branch) => {
-                  const forkScene = sceneMap.get(branch.branchPointSceneId);
-                  return (
-                    <BranchPanel
-                      key={branch.id}
-                      branch={branch}
-                      forkSceneTitle={forkScene?.title ?? 'unknown scene'}
-                      projectId={projectId}
-                      onDeleted={() => {
-                        if (activeBranchId === branch.id) setActiveBranchId(null);
-                      }}
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </div>
+                    {/* "Branch here" hover action */}
+                    <button
+                      onClick={() => setForkingScene(scene)}
+                      className="flex-shrink-0 flex items-center gap-1 text-xs text-muted-foreground
+                                 hover:text-violet-500 transition-colors opacity-0 group-hover:opacity-100 mt-1"
+                    >
+                      <GitFork className="w-3 h-3" />
+                      Branch here
+                    </button>
+                  </div>
+
+                  {/* Inline branches — indented under this scene node */}
+                  {hasBranches && (
+                    <div className="pl-7 pb-2 space-y-2">
+                      {sceneBranches.map((branch) => (
+                        <div key={branch.id} className="relative">
+                          {/* Horizontal arm: trunk spine → branch panel */}
+                          <div
+                            className="absolute left-[-19px] top-[16px] w-5 h-0.5 rounded-full"
+                            style={{ backgroundColor: branch.color ?? '#8B5CF6' }}
+                          />
+                          <BranchPanel
+                            branch={branch}
+                            forkSceneTitle={scene.title ?? `Scene ${idx + 1}`}
+                            projectId={projectId}
+                            onDeleted={() => {
+                              if (activeBranchId === branch.id) setActiveBranchId(null);
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+
+          {branches.length === 0 && (
+            <div className="mt-4 rounded-lg border border-dashed border-border p-6 text-center">
+              <GitFork className="w-8 h-8 mx-auto mb-2 text-muted-foreground opacity-40" />
+              <p className="text-sm text-muted-foreground">
+                No branches yet. Hover over a scene and click &ldquo;Branch here&rdquo;.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
