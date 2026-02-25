@@ -183,7 +183,7 @@ function BranchSubTree({ branch }: { branch: StoryBranch }) {
 
             {branch.scenes.length === 0 ? (
               <p className="text-xs text-muted-foreground pl-2 pb-2 italic">
-                No scenes yet — add scenes via the Branches page.
+                No scenes yet — go to the Branches page to add scenes here.
               </p>
             ) : (
               <div className="space-y-2">

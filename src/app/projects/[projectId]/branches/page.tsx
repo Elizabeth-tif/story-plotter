@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
+import { v4 as uuidv4 } from 'uuid';
 import {
   GitFork,
   Plus,
@@ -14,7 +15,7 @@ import {
   ChevronRight,
   Circle,
 } from 'lucide-react';
-import { Button, Input, Label, Modal } from '@/components/ui';
+import { Button, Input, Label, Modal, Textarea } from '@/components/ui';
 import { Badge } from '@/components/ui';
 import { useProjectStore, useBranches } from '@/stores';
 import type { Scene, StoryBranch } from '@/types';
@@ -146,6 +147,80 @@ function CreateBranchModal({
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Add-scene-to-branch modal
+// ──────────────────────────────────────────────────────────────────────────────
+interface AddBranchSceneModalProps {
+  branchId: string;
+  branchName: string;
+  sceneCount: number;
+  onClose: () => void;
+}
+
+function AddBranchSceneModal({ branchId, branchName, sceneCount, onClose }: AddBranchSceneModalProps) {
+  const { addSceneToBranch } = useProjectStore();
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+
+  const handleAdd = () => {
+    if (!title.trim()) return;
+    const now = new Date().toISOString();
+    const scene: Scene = {
+      id: uuidv4(),
+      title: title.trim(),
+      description: description.trim(),
+      content: '',
+      status: 'draft',
+      wordCount: 0,
+      tags: [],
+      attachments: [],
+      order: sceneCount,
+      createdAt: now,
+      updatedAt: now,
+    };
+    addSceneToBranch(branchId, scene);
+    onClose();
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title={`Add Scene to "${branchName}"`}>
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="branch-scene-title">Scene title</Label>
+          <Input
+            id="branch-scene-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. The Confrontation…"
+            autoFocus
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAdd(); }}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="branch-scene-desc">
+            Description{' '}
+            <span className="text-muted-foreground font-normal">(optional)</span>
+          </Label>
+          <Textarea
+            id="branch-scene-desc"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Brief summary of this scene…"
+            rows={3}
+          />
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleAdd} disabled={!title.trim()}>
+            <Plus className="w-4 h-4 mr-2" />
+            Add Scene
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Branch detail panel (recursive – renders its own children)
 // ──────────────────────────────────────────────────────────────────────────────
 interface ForkTarget {
@@ -177,6 +252,7 @@ function BranchPanel({
   const { deleteBranch, setLastKnownTimestamp } = useProjectStore();
   const [isExpanded, setIsExpanded] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [isAddingScene, setIsAddingScene] = useState(false);
 
   // Map: sceneId → child branches rooted at this branch
   const childrenBySceneId = useMemo(() => {
@@ -245,6 +321,16 @@ function BranchPanel({
           {branch.scenes.length} scene{branch.scenes.length !== 1 ? 's' : ''}
         </Badge>
 
+        {/* Add scene to this branch */}
+        <button
+          onClick={() => setIsAddingScene(true)}
+          className="flex-shrink-0 flex items-center gap-1 text-xs text-muted-foreground
+                     hover:text-foreground transition-colors"
+          title="Add scene to branch"
+        >
+          <Plus className="w-3.5 h-3.5" />
+        </button>
+
         {/* Quick sub-branch from last scene */}
         {branch.scenes.length > 0 && (
           <button
@@ -299,10 +385,16 @@ function BranchPanel({
       {isExpanded && (
         <div className="px-4 py-3 bg-card/50 border-t border-border">
           {branch.scenes.length === 0 ? (
-            <p className="text-xs text-muted-foreground py-2">
-              No scenes yet. Go to{' '}
-              <span className="text-foreground">Timeline</span> to add scenes to this branch.
-            </p>
+            <div className="flex items-center gap-3 py-2">
+              <p className="text-xs text-muted-foreground">No scenes yet.</p>
+              <button
+                onClick={() => setIsAddingScene(true)}
+                className="flex items-center gap-1 text-xs text-violet-400 hover:text-violet-300 transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+                Add scene
+              </button>
+            </div>
           ) : (
             <ol className="space-y-0">
               {branch.scenes.map((scene, idx) => {
@@ -380,6 +472,15 @@ function BranchPanel({
             </ol>
           )}
         </div>
+      )}
+
+      {isAddingScene && (
+        <AddBranchSceneModal
+          branchId={branch.id}
+          branchName={branch.name}
+          sceneCount={branch.scenes.length}
+          onClose={() => setIsAddingScene(false)}
+        />
       )}
     </div>
   );
