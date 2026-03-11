@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { v4 as uuidv4 } from 'uuid';
@@ -67,6 +67,7 @@ export default function ScenesPage() {
     updateScene(editingScene.id, {
       title: data.title,
       description: data.description,
+      content: data.content,
       povCharacterId: data.povCharacterId,
       location: data.location,
       status: data.status,
@@ -294,15 +295,31 @@ function SceneFormModal({
   } = useForm<CreateSceneInput>({
     resolver: zodResolver(createSceneSchema),
     defaultValues: {
-      title: defaultValues?.title || '',
-      description: defaultValues?.description || '',
-      povCharacterId: defaultValues?.povCharacterId || '',
-      location: defaultValues?.location || '',
-      status: defaultValues?.status || 'draft',
-      color: defaultValues?.color || '#6B7280',
-      tags: defaultValues?.tags || [],
+      title: '',
+      description: '',
+      content: '',
+      povCharacterId: '',
+      location: '',
+      status: 'draft',
+      color: '#6B7280',
+      tags: [],
     },
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      reset({
+        title: defaultValues?.title || '',
+        description: defaultValues?.description || '',
+        content: defaultValues?.content || '',
+        povCharacterId: defaultValues?.povCharacterId || '',
+        location: defaultValues?.location || '',
+        status: defaultValues?.status || 'draft',
+        color: defaultValues?.color || '#6B7280',
+        tags: defaultValues?.tags || [],
+      });
+    }
+  }, [isOpen, defaultValues, reset]);
 
   const handleFormSubmit = (data: CreateSceneInput) => {
     console.log('[SceneForm] Submitting scene data:', data);
@@ -315,7 +332,7 @@ function SceneFormModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title={title} className="max-w-lg">
+    <Modal isOpen={isOpen} onClose={onClose} title={title} className="max-w-2xl">
       <form onSubmit={handleSubmit(handleFormSubmit, handleFormError)} className="space-y-4 mt-4">
         <div className="space-y-2">
           <Label htmlFor="title">Title *</Label>
@@ -335,6 +352,19 @@ function SceneFormModal({
           />
           {errors.description && (
             <p className="text-sm text-destructive">{errors.description.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="content">Content</Label>
+          <Textarea
+            id="content"
+            {...register('content')}
+            placeholder="Write the scene content here..."
+            rows={6}
+          />
+          {errors.content && (
+            <p className="text-sm text-destructive">{errors.content.message}</p>
           )}
         </div>
 
