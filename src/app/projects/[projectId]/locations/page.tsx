@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { v4 as uuidv4 } from 'uuid';
@@ -393,13 +393,25 @@ function LocationFormModal({
   } = useForm<CreateLocationInput>({
     resolver: zodResolver(createLocationSchema),
     defaultValues: {
-      name: defaultValues?.name || '',
-      description: defaultValues?.description || '',
-      imageUrl: defaultValues?.imageUrl || '',
-      color: defaultValues?.color || '#10B981',
-      tags: defaultValues?.tags || [],
+      name: '',
+      description: '',
+      imageUrl: '',
+      color: '#10B981',
+      tags: [],
     },
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      reset({
+        name: defaultValues?.name || '',
+        description: defaultValues?.description || '',
+        imageUrl: defaultValues?.imageUrl || '',
+        color: defaultValues?.color || '#10B981',
+        tags: defaultValues?.tags || [],
+      });
+    }
+  }, [isOpen, defaultValues, reset]);
 
   const handleFormSubmit = (data: CreateLocationInput) => {
     onSubmit(data);

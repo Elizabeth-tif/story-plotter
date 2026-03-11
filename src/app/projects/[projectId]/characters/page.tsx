@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { v4 as uuidv4 } from 'uuid';
@@ -294,14 +294,27 @@ function CharacterFormModal({
   } = useForm<CreateCharacterInput>({
     resolver: zodResolver(createCharacterSchema),
     defaultValues: {
-      name: defaultValues?.name || '',
-      role: defaultValues?.role || '',
-      age: defaultValues?.age,
-      description: defaultValues?.description || '',
-      color: defaultValues?.color || '#6B7280',
-      tags: defaultValues?.tags || [],
+      name: '',
+      role: '',
+      age: undefined,
+      description: '',
+      color: '#6B7280',
+      tags: [],
     },
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      reset({
+        name: defaultValues?.name || '',
+        role: defaultValues?.role || '',
+        age: defaultValues?.age,
+        description: defaultValues?.description || '',
+        color: defaultValues?.color || '#6B7280',
+        tags: defaultValues?.tags || [],
+      });
+    }
+  }, [isOpen, defaultValues, reset]);
 
   const handleFormSubmit = (data: CreateCharacterInput) => {
     onSubmit(data);

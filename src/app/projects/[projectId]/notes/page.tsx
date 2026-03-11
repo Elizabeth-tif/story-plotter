@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { v4 as uuidv4 } from 'uuid';
@@ -336,13 +336,25 @@ function NoteFormModal({
   } = useForm<CreateNoteInput>({
     resolver: zodResolver(createNoteSchema),
     defaultValues: {
-      title: defaultValues?.title || '',
-      content: defaultValues?.content || '',
-      category: defaultValues?.category || 'general',
-      color: defaultValues?.color || '#6B7280',
-      tags: defaultValues?.tags || [],
+      title: '',
+      content: '',
+      category: 'general',
+      color: '#6B7280',
+      tags: [],
     },
   });
+
+  useEffect(() => {
+    if (isOpen) {
+      reset({
+        title: defaultValues?.title || '',
+        content: defaultValues?.content || '',
+        category: defaultValues?.category || 'general',
+        color: defaultValues?.color || '#6B7280',
+        tags: defaultValues?.tags || [],
+      });
+    }
+  }, [isOpen, defaultValues, reset]);
 
   const handleFormSubmit = (data: CreateNoteInput) => {
     onSubmit(data);
