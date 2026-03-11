@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { v4 as uuidv4 } from 'uuid';
@@ -14,6 +14,7 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  Edit,
 } from 'lucide-react';
 import { Button, Input, Label, Modal, Textarea } from '@/components/ui';
 import { Badge } from '@/components/ui';
@@ -221,6 +222,97 @@ function AddBranchSceneModal({ branchId, branchName, sceneCount, onClose }: AddB
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
+// Edit-scene-in-branch modal
+// ──────────────────────────────────────────────────────────────────────────────
+interface EditBranchSceneModalProps {
+  branchId: string;
+  scene: Scene;
+  onClose: () => void;
+}
+
+function EditBranchSceneModal({ branchId, scene, onClose }: EditBranchSceneModalProps) {
+  const { updateBranchScene } = useProjectStore();
+  const [title, setTitle] = useState(scene.title);
+  const [description, setDescription] = useState(scene.description ?? '');
+  const [content, setContent] = useState(scene.content ?? '');
+  const [status, setStatus] = useState<Scene['status']>(scene.status ?? 'draft');
+
+  useEffect(() => {
+    setTitle(scene.title);
+    setDescription(scene.description ?? '');
+    setContent(scene.content ?? '');
+    setStatus(scene.status ?? 'draft');
+  }, [scene]);
+
+  const handleSave = () => {
+    if (!title.trim()) return;
+    updateBranchScene(branchId, scene.id, {
+      title: title.trim(),
+      description: description.trim(),
+      content: content.trim(),
+      status: status as Scene['status'],
+    });
+    onClose();
+  };
+
+  return (
+    <Modal isOpen onClose={onClose} title="Edit Scene" className="max-w-2xl">
+      <div className="space-y-4">
+        <div className="space-y-1.5">
+          <Label htmlFor="edit-branch-scene-title">Title *</Label>
+          <Input
+            id="edit-branch-scene-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Scene title…"
+            autoFocus
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="edit-branch-scene-desc">Description</Label>
+          <Textarea
+            id="edit-branch-scene-desc"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Brief summary of this scene…"
+            rows={2}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="edit-branch-scene-content">Content</Label>
+          <Textarea
+            id="edit-branch-scene-content"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Write the scene content here…"
+            rows={6}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="edit-branch-scene-status">Status</Label>
+          <select
+            id="edit-branch-scene-status"
+            value={status}
+            onChange={(e) => setStatus(e.target.value as Scene['status'])}
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
+            <option value="draft">Draft</option>
+            <option value="in-progress">In Progress</option>
+            <option value="complete">Complete</option>
+          </select>
+        </div>
+        <div className="flex justify-end gap-2 pt-1">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button onClick={handleSave} disabled={!title.trim()}>
+            Save Changes
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
 // Branch detail panel (recursive – renders its own children)
 // ──────────────────────────────────────────────────────────────────────────────
 interface ForkTarget {
@@ -249,10 +341,12 @@ function BranchPanel({
   onDeleted,
   onFork,
 }: BranchPanelProps) {
-  const { deleteBranch, setLastKnownTimestamp } = useProjectStore();
+  const { deleteBranch, deleteBranchScene, setLastKnownTimestamp } = useProjectStore();
   const [isExpanded, setIsExpanded] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isAddingScene, setIsAddingScene] = useState(false);
+  const [editingScene, setEditingScene] = useState<Scene | null>(null);
+  const [deletingSceneId, setDeletingSceneId] = useState<string | null>(null);
 
   // Map: sceneId → child branches rooted at this branch
   const childrenBySceneId = useMemo(() => {
@@ -426,6 +520,36 @@ function BranchPanel({
                       >
                         {scene.status}
                       </Badge>
+                      {/* Edit scene */}
+                      <button
+                        onClick={() => setEditingScene(scene)}
+                        className="flex-shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover:opacity-100"
+                        title="Edit scene"
+                      >
+                        <Edit className="w-3 h-3" />
+                      </button>
+                      {/* Delete scene */}
+                      {deletingSceneId === scene.id ? (
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <span className="text-[10px] text-red-400">Delete?</span>
+                          <button
+                            onClick={() => { deleteBranchScene(branch.id, scene.id); setDeletingSceneId(null); }}
+                            className="text-[10px] text-red-400 hover:text-red-300"
+                          >Yes</button>
+                          <button
+                            onClick={() => setDeletingSceneId(null)}
+                            className="text-[10px] text-muted-foreground hover:text-foreground"
+                          >No</button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setDeletingSceneId(scene.id)}
+                          className="flex-shrink-0 text-muted-foreground hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                          title="Delete scene"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      )}
                       {/* "Branch here" inside this branch */}
                       <button
                         onClick={() =>
@@ -480,6 +604,14 @@ function BranchPanel({
           branchName={branch.name}
           sceneCount={branch.scenes.length}
           onClose={() => setIsAddingScene(false)}
+        />
+      )}
+
+      {editingScene && (
+        <EditBranchSceneModal
+          branchId={branch.id}
+          scene={editingScene}
+          onClose={() => setEditingScene(null)}
         />
       )}
     </div>
